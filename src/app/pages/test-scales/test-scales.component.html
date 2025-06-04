@@ -1,0 +1,137 @@
+<div class="min-h-screen bg-white pt-6 p-4 sm:px-6 lg:px-8">
+  <app-progress-bar
+    [step]="step"
+    [totalSteps]="8"
+    [completedSteps]="completedStepsArray"
+    (stepClicked)="onStepSelected($event)"
+    [maxAllowedStep]="(testState?.currentStep ?? step) + 1"
+  ></app-progress-bar>
+
+  <div class="max-w-7xl mx-auto">
+    <div class="flex flex-col lg:flex-row gap-8">
+      <!-- Левая колонка: форма шкалы -->
+      <div class="w-full lg:w-1/2">
+        <h1 class="text-xl sm:text-2xl font-semibold text-gray-800 mb-6">Define scales</h1>
+        <form [formGroup]="newScaleForm" class="space-y-6">
+
+          <!-- Тип шкалы -->
+          <div>
+            <label class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1">
+              Type of scale <span class="text-red-500">*</span>
+            </label>
+            <select formControlName="scaleType"
+              class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm bg-white text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+              <option value="unipolar">Unipolar</option>
+              <option value="bipolar">Bipolar</option>
+              <option value="gradual">Gradual</option>
+            </select>
+          </div>
+
+          <!-- Название полюса (-) -->
+          <div>
+            <label class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1">
+              Scale name @if(newScaleForm.get('scaleType')?.value === '2'){(-)} <span class="text-red-500">*</span>
+            </label>
+            <input type="text" formControlName="pole1"
+              class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+              placeholder="Enter scale name" />
+            @if(getError('pole1')) {
+              <p class="text-red-500 text-sm mt-1">{{ (getError('pole1') || '') | sentencecase }}</p>
+            }
+          </div>
+
+          <!-- Название полюса (+) -->
+          @if(newScaleForm.get('scaleType')?.value === '2') {
+            <div>
+              <label class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1">
+                Scale name (+) <span class="text-red-500">*</span>
+              </label>
+              <input type="text" formControlName="pole2"
+                class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                placeholder="Enter scale name" />
+              @if(getError('pole2')) {
+                <p class="text-red-500 text-sm mt-1">{{ (getError('pole2') || '') | sentencecase }}</p>
+              }
+            </div>
+          }
+
+          <!-- Привязка к блоку -->
+          <div>
+            <label class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1">
+              Scale block <span class="text-red-500">*</span>
+            </label>
+            <select formControlName="blockId"
+              class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm bg-white text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+              @for (block of blocks; track block.id) {
+                <option [value]="block.id">{{ block.name }}</option>
+              }
+            </select>
+            @if(getError('blockId')) {
+              <p class="text-red-500 text-sm mt-1">{{ (getError('blockId') || '') | sentencecase }}</p>
+            }
+          </div>
+
+          <!-- Кнопки -->
+          @if(isEditing) {
+            <div class="flex gap-4 justify-end">
+              <button class="bg-sky-700 hover:bg-sky-800 text-white font-medium px-6 py-2 rounded"
+                (click)="updateScale()">Save changes</button>
+              <button class="bg-gray-400 hover:bg-gray-500 text-white font-medium px-6 py-2 rounded"
+                (click)="cancelEdit()">Cancel</button>
+            </div>
+          } @else {
+            <div class="flex flex-col sm:flex-row sm:justify-between gap-4">
+              <button
+                class="bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-2 rounded disabled:bg-gray-400 disabled:cursor-not-allowed"
+                (click)="addNewScale()">+ Add scale</button>
+
+              <div class="flex flex-col sm:flex-row gap-4">
+                <button
+                  class="bg-sky-700 hover:bg-sky-800 text-white font-medium px-6 py-2 rounded disabled:bg-sky-400"
+                  [disabled]="!resourceService.blocksResource.value()?.length"
+                  (click)="saveTest()">Save test</button>
+
+                <button
+                  class="bg-sky-700 hover:bg-sky-800 text-white font-medium px-6 py-2 rounded disabled:bg-sky-400"
+                  [disabled]="!resourceService.blocksResource.value()?.length"
+                  (click)="saveTest(true)">Next →</button>
+              </div>
+            </div>
+            @if(resourceService.blocksResource.value()?.length === 0) {
+              <p class="text-red-500 text-sm mt-2">Please add blocks to assign scales</p>
+            }
+          }
+        </form>
+      </div>
+
+      <!-- Правая колонка -->
+      <div class="w-full lg:w-1/2 border-l border-gray-200 pl-4">
+        <h2 class="text-xl sm:text-2xl font-semibold text-gray-800 mb-6">Current scales</h2>
+
+        @if(allScales.length === 0) {
+          <p class="text-gray-500 sm:text-lg md:text-xl font-medium">
+            No scales defined yet, please add them to the test
+          </p>
+        } @else {
+          <div class="flex flex-col gap-4">
+            @for(scale of allScales; track scale.id ?? scale.pole1) {
+              <app-list-item
+                [item]="scale" type="scale"
+                (edit)="onEditScale(scale)"
+                (delete)="confirmDelete(scale)"
+                [isEditing]="isEditing"
+              ></app-list-item>
+
+              <app-confirm-dialog
+                [visible]="showDeleteDialog"
+                [message]="'Are you sure you want to delete this scale?'"
+                (confirm)="handleDeleteConfirmed()"
+                (cancel)="handleDeleteCancelled()">
+              </app-confirm-dialog>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</div>

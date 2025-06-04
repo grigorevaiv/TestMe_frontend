@@ -1,0 +1,33 @@
+<div class="w-full mb-10 flex flex-col gap-3">
+  <!-- метки -->
+  <div class="flex justify-between text-sm sm:text-base text-gray-500 font-medium mb-1">
+@for (i of totalStepsArray(); track i) {
+<button
+  type="button"
+    class="flex-1 text-center cursor-pointer"
+    (click)="onStepClick(i)"
+
+    [ngClass]="{
+      'text-sky-700 font-semibold': i === step
+    }"
+  >
+    {{ stepLabels[i - 1] }}
+  </button>
+}
+
+  </div>
+
+  <!-- шкала -->
+<div class="flex gap-1">
+  @for (i of totalStepsArray(); track i) {
+    <div
+      class="flex-1 h-2 rounded-full transition-all duration-300"
+      [ngClass]="{
+        'bg-sky-600': completedSteps.includes(i),
+        'bg-gray-200': !completedSteps.includes(i + 1)
+      }"
+    ></div>
+  }
+</div>
+
+</div>

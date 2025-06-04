@@ -1,0 +1,67 @@
+<nav class="bg-white shadow-sm border-b border-gray-200">
+  <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-6">
+    <div class="flex justify-between h-20 items-center">
+      
+      <!-- Логотип -->
+      <div class="flex items-center space-x-3">
+        <a class="text-sky-700 text-2xl font-semibold font-logo" [routerLink]="'/'">TestMe</a>
+      </div>
+
+      <!-- Гамбургер для мобильных -->
+      <div class="sm:hidden">
+        <button (click)="menuOpen = !menuOpen" class="text-gray-700 hover:text-sky-700 focus:outline-none">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2"
+               viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Навигация + пользователь (десктоп) -->
+      <div class="hidden sm:flex items-center space-x-6">
+        <a class="text-base sm:text-lg md:text-xl text-gray-700 hover:text-sky-700 transition font-interactive" [routerLink]="'/'"
+        [routerLinkActiveOptions]="{ exact: true }"
+        routerLinkActive="border-b-2 text-sky-700"
+        >Tests</a>
+        <a class="text-base sm:text-lg md:text-xl text-gray-700 hover:text-sky-700 transition font-interactive">Patients</a>
+
+        <!-- Выпадающее меню -->
+        <div class="relative">
+          <button 
+            (click)="toggleDropdown()"
+            class="flex items-center text-base sm:text-lg md:text-xl font-semibold font-interactive text-gray-700 hover:text-sky-700 focus:outline-none">
+            Hi, Katya!
+            <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" stroke-width="2"
+                 viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          @if (dropdownOpen) {
+            <div class="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-md shadow-lg z-10">
+              <a href="#"
+                 class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition">
+                Profile
+              </a>
+              <a href="#"
+                 (click)="logout()"
+                 class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition">
+                Log out
+              </a>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- Меню для мобильных -->
+    @if(menuOpen){
+    <div class="sm:hidden mt-2 space-y-2">
+      <a class="block text-base text-gray-700 hover:text-sky-700 transition font-interactive" [routerLink]="'/'">Tests</a>
+      <a class="block text-base text-gray-700 hover:text-sky-700 transition font-interactive">Patients</a>
+      <a class="block text-base text-gray-700 hover:text-sky-700 transition font-interactive">Profile</a>
+      <a class="block text-base text-gray-700 hover:text-sky-700 transition font-interactive" (click)="logout()">Log out</a>
+    </div>
+    }
+  </div>
+</nav>

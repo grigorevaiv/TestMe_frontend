@@ -1,0 +1,49 @@
+<div class="flex flex-col w-full gap-4 max-w-2xl mx-auto p-4 bg-white rounded-xl shadow-lg border border-gray-200">
+
+  <!-- Заголовок -->
+  <h2 class="text-xl sm:text-2xl font-semibold text-slate-800">
+    Pick questions from the base
+  </h2>
+  <p class="text-slate-600 text-base">
+    Use the search or filter by category to find the questions you need. Drag and drop them into your test.
+  </p>
+
+  <!-- Фильтр по тэгу -->
+  <select
+    class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm"
+    id="block"
+    (change)="onFilterChange($event)"
+  >
+    <option value="0">All categories</option>
+    @for (tag of tags; track tag.id) {
+      <option [value]="tag.id">{{ tag.name }}</option>
+    }
+  </select>
+
+  <!-- Поиск -->
+  <input
+    type="text"
+    placeholder="Search by question text"
+    class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm"
+    (input)="onSearchChange($event)"
+  />
+
+  <!-- Список вопросов -->
+  <div class="max-h-64 overflow-y-auto border border-gray-300 rounded-md px-4 py-2 bg-gray-50">
+    @if (filteredQuestions.length > 0) {
+      @for (question of filteredQuestions; track question.id ?? $index) {
+        <div
+          class="p-2 mb-2 bg-indigo-100 rounded shadow cursor-move hover:bg-indigo-200 transition-all"
+          draggable="true"
+          (dragstart)="onDragStart($event, question)"
+        >
+          {{ question.text }}
+        </div>
+      }
+    } @else {
+      <div class="text-center text-base text-gray-500 py-4">
+        There are no questions matching this criteria yet.
+      </div>
+    }
+  </div>
+</div>
