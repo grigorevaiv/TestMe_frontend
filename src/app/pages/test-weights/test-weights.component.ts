@@ -9,10 +9,12 @@ import { firstValueFrom, take } from 'rxjs';
 import { NgClass, NgFor, NgIf } from '@angular/common';
 import { ValidationService } from '../../services/validation.service';
 import { ToastService } from '../../services/toast.service';
+import { ProgressBarComponent } from '../../components/progress-bar/progress-bar.component';
+import { stepRoutes } from '../../constants/step-routes';
 
 @Component({
   selector: 'app-test-weights',
-  imports: [ReactiveFormsModule, NgIf, NgClass, NgFor],
+  imports: [ReactiveFormsModule, NgIf, NgClass, NgFor, ProgressBarComponent],
   templateUrl: './test-weights.component.html',
   styleUrl: './test-weights.component.css'
 })
@@ -25,6 +27,7 @@ export class TestWeightsComponent {
   validationService = inject(ValidationService);
   fb = inject(FormBuilder);
   toast = inject(ToastService);
+  step = 6;
   
   blocks: Block[] = [];
   scales: Scale[] = [];
@@ -47,22 +50,40 @@ export class TestWeightsComponent {
   } = {};
 
 
-  constructor() {
-    this.initializeRouteParams();
-    effect(() => {
-      this.blocks = this.resourceService.blocksResource.value() || [];
-      this.scales = this.resourceService.scalesResource.value() || [];
-      this.questions = this.resourceService.questionsResource.value() || [];
-      this.answers = this.resourceService.answersResource.value() || [];
-      this.weights = this.resourceService.weightsResource.value() || [];
-      this.testState = this.resourceService.testResource.value()?.state ?? null;
-      this.initializeWeightsForms();
-      if (this.weights.length > 0) {
-        this.patchWeightsToForm(this.weights);
-      }
-    });
-  }
+constructor() {
+  this.initializeRouteParams();
 
+  effect(() => {
+    const blocks = this.resourceService.blocksResource.value();
+    const scales = this.resourceService.scalesResource.value();
+    const questions = this.resourceService.questionsResource.value();
+    const answers = this.resourceService.answersResource.value();
+    const weights = this.resourceService.weightsResource.value();
+    const test = this.resourceService.testResource.value();
+
+    // 👉 Ждём, пока всё загрузится
+    if (!blocks || !scales || !questions || !answers || !test) return;
+
+    // ✅ Всё есть — теперь сохраняем и инициализируем
+    this.blocks = blocks;
+    this.scales = scales;
+    this.questions = questions;
+    this.answers = answers;
+    this.weights = weights || [];
+    this.testState = test.state ?? null;
+
+    this.initializeWeightsForms();
+
+    if (this.weights.length > 0) {
+      this.patchWeightsToForm(this.weights);
+    }
+  });
+}
+
+  get completedStepsArray(): number[] {
+    const currentStep = this.testState?.currentStep ?? 0;
+    return Array.from({ length: currentStep }, (_, i) => i + 1);
+  }
   private initializeRouteParams() {
     this.route.paramMap.subscribe(async (params) => {
       this.mode = params.get('mode') || 'new';
@@ -117,20 +138,35 @@ export class TestWeightsComponent {
     return block.questionsType;
   }
 
-  patchWeightsToForm(weights: Weight[]): void {
-    for (const weight of weights) {
-      for (const blockId of Object.keys(this.weightsPerScale)) {
-        const answerGroups = this.weightsPerScale[+blockId]?.[weight.scaleId];
-        if (answerGroups?.[weight.answerId]) {
-          answerGroups[weight.answerId].patchValue({
-            value: weight.value,
-            id: weight.id ?? null
-          });
-          break;
-        }
+patchWeightsToForm(weights: any[]): void {
+  for (const rawWeight of weights) {
+    // Поддержка как snake_case, так и camelCase
+    const scaleId = +(rawWeight.scaleId ?? rawWeight.scale_id);
+    const answerId = +(rawWeight.answerId ?? rawWeight.answer_id);
+    const value = rawWeight.value;
+    const id = rawWeight.id;
+
+    let patched = false;
+
+    for (const blockId of Object.keys(this.weightsPerScale)) {
+      const answerGroups = this.weightsPerScale[+blockId]?.[scaleId];
+
+      if (answerGroups?.[answerId]) {
+        answerGroups[answerId].patchValue({
+          value: value,
+          id: id ?? null
+        });
+        patched = true;
+        break; // найден — дальше не ищем
       }
     }
+
+    if (!patched) {
+      console.warn(`⚠️ Could not patch weight: scaleId=${scaleId}, answerId=${answerId}, value=${value}`);
+    }
   }
+}
+
 
     onBipolarCheck(blockId: number, scaleId: number, answerId: number, value: -1 | 1): void {
     const group = this.getWeightControl(blockId, scaleId, answerId);
@@ -210,66 +246,91 @@ onExclusiveCheck(
     return this.answers.filter(a => a.questionId === questionId);
   }
 
-  collectWeights(): { id?: number; answerId: number; scaleId: number; value: number }[] {
-    const result = [];
+collectWeights(): {
+  id?: number;
+  answerId: number;
+  scaleId: number;
+  value: number;
+}[] {
+  const result: {
+    id?: number;
+    answerId: number;
+    scaleId: number;
+    value: number;
+  }[] = [];
 
-    for (const [blockId, scaleMap] of Object.entries(this.weightsPerScale)) {
-      for (const [scaleId, answersMap] of Object.entries(scaleMap)) {
-        for (const [answerId, group] of Object.entries(answersMap)) {
-          const value = group.get('value')?.value;
-          const id = group.get('id')?.value;
+  for (const [blockId, scaleMap] of Object.entries(this.weightsPerScale)) {
+    for (const [scaleId, answersMap] of Object.entries(scaleMap)) {
+      for (const [answerId, group] of Object.entries(answersMap)) {
+        const value = group.get('value')?.value ?? 0;
+        const id = group.get('id')?.value;
+
+        // Добавляем, только если вес есть (или он уже был сохранён)
+        if (value !== 0 || id !== null) {
           result.push({
-            id: id ?? undefined,
+            id: id ?? undefined, // undefined = новый
             answerId: +answerId,
             scaleId: +scaleId,
-            value: value ?? 0
+            value: value
           });
         }
       }
     }
-
-    return result;
   }
+
+  return result;
+}
+
 
 // ПОТЕРЯЛИ ПРОВЕРКУ ШКАЛЫ
 async saveWeights(navigate: boolean = false): Promise<void> {
-  const isValid = this.validateAllQuestions();
+  const validation = this.validateAllQuestions();
 
-  if (!isValid) {
-    this.toast.show({ message: 'Please fill in all required fields before saving', type: 'error' });
+  if (!validation.isValid) {
+    if (validation.reason === 'questions') {
+      this.toast.show({ message: 'Please fill in all required questions before saving', type: 'error' });
+      if (validation.firstInvalidQuestionId !== undefined) {
+        setTimeout(() => this.scrollToQuestion(validation.firstInvalidQuestionId!), 0);
+      }
+    } else if (validation.reason === 'scales') {
+      const scaleNames = validation.emptyScales?.join(', ') ?? '';
+      this.toast.show({
+        message: `The following scales have no weights assigned: ${scaleNames}`,
+        type: 'warning'
+      });
+    }
     return;
   }
 
   const collected = this.collectWeights();
-  console.log('Weights to send:', collected);
+  const toCreate = collected.filter(w => w.id === undefined);
+  const toUpdate = collected.filter(w => w.id !== undefined);
 
-  if (!this.weights || this.weights.length === 0) {
-    this.testService.saveWeightsBatch(collected).subscribe(
-    (data) => {
-      console.log('Weights saved:', data);
-      this.toast.show({ message: 'Weights saved successfully', type: 'success' });
-    },
-    (error) => {
-      console.error('❌ Error saving weights:', error);
-      this.toast.show({ message: 'Failed to save weights', type: 'error' });
+  console.log('To create:', toCreate);
+  console.log('To update:', toUpdate);
+
+  try {
+    if (toCreate.length > 0) {
+      await firstValueFrom(this.testService.saveWeightsBatch(toCreate));
+      this.toast.show({ message: 'New weights saved successfully', type: 'success' });
     }
-  );
-  } else {
-    this.testService.updateWeightsBatch(collected).subscribe((data) => {
-      console.log('Weights updated:', data);
-      this.toast.show({ message: 'Weights updated successfully', type: 'success' });
-    });
+
+    if (toUpdate.length > 0) {
+      await firstValueFrom(this.testService.updateWeightsBatch(toUpdate));
+      this.toast.show({ message: 'Existing weights updated successfully', type: 'success' });
+    }
+  } catch (error) {
+    console.error('❌ Error saving/updating weights:', error);
+    this.toast.show({ message: 'Failed to save weights', type: 'error' });
+    return;
   }
 
-  if (!this.testState) return;
-
-  if (this.testState.currentStep < 6) {
+  if (this.testState && this.testState.currentStep < 6) {
     this.testState.currentStep = 6;
-    const updatedState = await firstValueFrom(
+    this.testState = await firstValueFrom(
       this.testService.updateTestStateStep(this.testId!, this.testState)
     );
-    this.testState = updatedState;
-    console.log('Test state updated to step 6:', updatedState);
+    console.log('Test state updated to step 6:', this.testState);
   }
 
   this.resourceService.triggerRefresh();
@@ -546,7 +607,8 @@ isQuestionFullyTouched(blockId: number, questionId: number): boolean {
 
 invalidGradualQuestionsNotUnique: number[] = [];
 invalidGradualQuestionsMissingValues: number[] = [];
-validateAllQuestions(): boolean {
+
+validateAllQuestions(): { isValid: boolean, reason?: 'questions' | 'scales', firstInvalidQuestionId?: number, emptyScales?: string[] } {
   this.invalidQuestions = [];
 
   for (const block of this.blocks) {
@@ -560,16 +622,15 @@ validateAllQuestions(): boolean {
 
       if (!hasWeight) {
         this.invalidQuestions.push(questionId);
-        continue; // дальше даже не проверяем
+        continue;
       }
 
-      // ✨ Валидация уникальности значений в gradual-шкалах
       for (const scale of scales) {
         if (scale.scaleType === 'gradual') {
           const isUnique = this.isGradualScaleValid(blockId, questionId, scale.id!);
           if (!isUnique) {
             this.invalidQuestions.push(questionId);
-            break; // один конфликт — и достаточно
+            break;
           }
         }
       }
@@ -577,21 +638,27 @@ validateAllQuestions(): boolean {
   }
 
   if (this.invalidQuestions.length > 0) {
-    setTimeout(() => this.scrollToQuestion(this.invalidQuestions[0]), 0);
-    return false;
+    return {
+      isValid: false,
+      reason: 'questions',
+      firstInvalidQuestionId: this.invalidQuestions[0]
+    };
   }
 
-  const empty = this.getEmptyScales(); // возвращает string[]
-  if (empty.length > 0) {
-    this.toast.show({
-      message: `No weights are assigned to a scale: ${empty.join(', ')}`,
-      type: 'warning'
-    });
-    return false;
+  const emptyScales = this.getEmptyScales();
+  this.emptyScales = emptyScales;
+  if (emptyScales.length > 0) {
+    return {
+      isValid: false,
+      reason: 'scales',
+      emptyScales: emptyScales
+    };
   }
 
-  return true;
+  return { isValid: true };
 }
+
+
 
 
 @ViewChildren('questionContainer') questionContainers!: QueryList<ElementRef<HTMLElement>>;
@@ -614,6 +681,8 @@ hasAnyWeightInScale(blockId: number, scaleId: number): boolean {
 
   return false;
 }
+
+emptyScales: string[] = [];
 
 getEmptyScales(): string [] {
   const empty: string [] = [];
@@ -696,7 +765,6 @@ private updateValidation(blockId: number, questionId: number): void {
   const hasGradualMissing = this.hasMissingValuesGradualScale(blockId, questionId);
   const hasGradualDuplicates = this.hasInvalidGradualScale(blockId, questionId);
 
-  // 💥 Очищаем независимо от того, показываем мы или нет
   this.invalidQuestions = this.invalidQuestions.filter(id => id !== questionId);
   this.invalidGradualQuestionsMissingValues = this.invalidGradualQuestionsMissingValues.filter(id => id !== questionId);
   this.invalidGradualQuestionsNotUnique = this.invalidGradualQuestionsNotUnique.filter(id => id !== questionId);
@@ -708,5 +776,8 @@ private updateValidation(blockId: number, questionId: number): void {
   if (hasGradualDuplicates && shouldShow) this.invalidGradualQuestionsNotUnique.push(questionId);
 }
 
-
+  onStepSelected(step: number) {
+    if (!this.testId || !stepRoutes[step]) return;
+    this.router.navigate(stepRoutes[step](this.testId));
+  }
 }

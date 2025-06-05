@@ -135,7 +135,7 @@ export class TestService {
     return this.http.put(`${this.baseUrl}/answers/batch/`, answers);
   }
 
-  // Веса
+
   getWeights(testId: number): Observable<Weight[]> {
     return this.http.get<Weight[]>(`${this.baseUrl}/${testId}/weights`);
   }

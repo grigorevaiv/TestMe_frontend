@@ -15,7 +15,7 @@
 @for (block of blocks; track block.id) {
   <div class="mb-8">
     <h2 class="text-base sm:text-lg md:text-xl lg:text-2xl font-semibold text-sky-700 mb-3 font-header">
-      {{ block.name | sentencecase }} block
+      {{ block.name | sentencecase }}
     </h2>
 
     @for (question of getQuestionsByBlock(block.id!); track question.id ?? $index; let qIndex = $index) {
