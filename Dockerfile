@@ -7,23 +7,6 @@ RUN npm install
 
 COPY . .
 
-ARG TESTS_BASE_URL
-ARG PATIENTS_BASE_URL
-
-ENV TESTS_BASE_URL=${TESTS_BASE_URL}
-ENV PATIENTS_BASE_URL=${PATIENTS_BASE_URL}
-
-RUN mkdir -p src/environments && \
-    echo "export const environment = {" \
-    "  TESTS_BASE_URL: ''," \
-    "  PATIENTS_BASE_URL: ''" \
-    "};" > src/environments/environment.ts
-
-RUN echo "export const environment = {" > src/environments/environment.prod.ts && \
-    echo "  TESTS_BASE_URL: '${TESTS_BASE_URL}'," >> src/environments/environment.prod.ts && \
-    echo "  PATIENTS_BASE_URL: '${PATIENTS_BASE_URL}'" >> src/environments/environment.prod.ts && \
-    echo "};" >> src/environments/environment.prod.ts
-
 RUN npx ng build --configuration=production
 
 FROM nginx:stable-alpine
