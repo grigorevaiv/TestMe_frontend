@@ -1,10 +1,11 @@
 <div class="min-h-screen bg-white pt-6 p-4 sm:px-6 lg:px-6">
     <app-progress-bar
+    *ngIf="testState"
     [step]="step"
     [totalSteps]="8"
     [completedSteps]="completedStepsArray"
     (stepClicked)="onStepSelected($event)"
-    [maxAllowedStep]="this.testState!.currentStep"
+    [maxAllowedStep]="testState.currentStep"
   ></app-progress-bar>
 <div
   class="w-full gap-6 transition-all duration-500 ease-in-out"
@@ -42,6 +43,7 @@
 
           @for (question of getQuestionsFormsForBlock(block.id!).controls; track question.get('id')?.value ?? $index; let j = $index) {
             <div
+              #questionRef
               class="mb-6 border border-gray-300 rounded-xl p-4 bg-white shadow-sm relative"
               [formGroup]="question"
               (dragover)="onDragOver($event)"
@@ -157,7 +159,7 @@
           class="w-full sm:w-auto bg-sky-700 hover:bg-sky-800 text-white text-sm sm:text-base md:text-lg font-medium px-6 py-2 rounded transition disabled:bg-gray-400 disabled:cursor-not-allowed"
           (click)="saveTest(true)"
         >
-          Next →
+          Save and update →
         </button>
       </div>
     </section>

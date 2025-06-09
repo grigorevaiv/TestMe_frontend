@@ -1,0 +1,29 @@
+<div class="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+  <div class="w-full lg:w-[70%] mx-auto bg-white border border-gray-200 rounded-xl shadow-sm p-6 space-y-6">
+
+    <!-- Заголовок и кнопка -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <h1 class="text-lg sm:text-xl md:text-2xl font-header font-semibold text-gray-800">Patients</h1>
+
+      <button
+        class="w-full sm:w-auto gap-2 px-4 py-2 text-sm sm:text-base md:text-lg font-interactive font-medium text-white bg-sky-700 rounded hover:opacity-80 hover:cursor-pointer hover:shadow-md transform hover:scale-[1.03] transition-all"
+        (click)="onCreatePatient()"
+      >
+        + New Patient 
+      </button>
+    </div>
+
+    <!-- Список пациентов -->
+    <div class="flex flex-col gap-5">
+      @for(patient of patients; track patient.id) {
+        <app-list-item [item]="patient" type="patient"
+          (edit)="onEditPatient(patient)"
+          (delete)="onDeletePatient(patient)"
+          (view)="onViewResults(patient)"
+        ></app-list-item>
+      }
+    </div>
+
+
+  </div>
+</div>

@@ -1,0 +1,51 @@
+<div *ngIf="results.length > 0; else noResults">
+  <h3 class="text-xl font-semibold mb-4">Результаты</h3>
+
+  <div *ngFor="let result of results" class="mb-4 p-4 border rounded shadow">
+    <p><strong>Результат ID:</strong> {{ result.testResultId }}</p>
+    <p><strong>Тест ID:</strong> {{ result.testId }}</p>
+
+    <ul class="mt-2">
+      <li *ngFor="let r of result.results">
+        <strong>{{ r.scaleName }}</strong> — {{ r.normalized }} ({{ r.interpretation }})
+      </li>
+    </ul>
+  </div>
+</div>
+
+<ng-template #noResults>
+  <p class="text-gray-600">Пока нет результатов</p>
+</ng-template>
+
+
+<!-- Кнопка -->
+<button (click)="openModal()" class="px-4 py-2 bg-blue-500 text-white rounded">
+  + Assign test
+</button>
+
+<!-- Модалка -->
+<div *ngIf="isModalOpen" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+  <div class="bg-white p-6 rounded shadow-lg w-full max-w-md">
+    <h2 class="text-xl font-semibold mb-4">Assign Tests</h2>
+
+    <div *ngFor="let test of tests">
+      <label class="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          [checked]="selectedTestIds.includes(test.id!)"
+          (change)="onCheckboxChange($event, test.id!)"
+        />
+        <span>{{ test.title }}</span>
+      </label>
+    </div>
+
+    <div class="flex justify-end mt-6 space-x-2">
+      <button (click)="closeModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded">
+        Cancel
+      </button>
+      <button (click)="saveAssignedTests()" class="px-4 py-2 bg-blue-600 text-white rounded">
+        Save
+      </button>
+    </div>
+  </div>
+</div>

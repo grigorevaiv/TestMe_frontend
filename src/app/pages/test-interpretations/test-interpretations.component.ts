@@ -6,13 +6,16 @@ import { TestService } from '../../services/test.service';
 import { stepRoutes } from '../../constants/step-routes';
 import { ProgressBarComponent } from '../../components/progress-bar/progress-bar.component';
 import { first, firstValueFrom } from 'rxjs';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ToastService } from '../../services/toast.service';
+import { SessionStorageService } from '../../services/session-storage.service';
+import { TestContextService } from '../../services/test-context.service';
+import { NgIf } from '@angular/common';
 
 @Component({
   selector: 'app-test-interpretations',
   standalone: true,
-  imports: [ReactiveFormsModule, ProgressBarComponent],
+  imports: [ReactiveFormsModule, ProgressBarComponent, NgIf],
   templateUrl: './test-interpretations.component.html',
   styleUrls: ['./test-interpretations.component.css']
 })
@@ -26,32 +29,55 @@ export class TestInterpretationsComponent {
   testInterpretations: Interpretation[] = [];
   step=8;
   router = inject(Router);
-  constructor() {
-    effect(() => {
-      this.testId = this.resourceService.testResource.value()?.id ?? null;
-      const scales = this.resourceService.scalesResource.value();
-      if (scales) {
-        console.log('Scales received:', scales);
-        this.scales = scales;
-        this.initializeInterpretationForms(scales);
-      } else {
-        console.log('No scales found for testId:', this.testId);
-      }
-      const interpretations = this.resourceService.interpretationsResource.value();
-      if (interpretations) {
-        console.log('Interpretations received:', interpretations);
-        this.testInterpretations = interpretations;
-        this.patchInterpretationsToForm(interpretations);
-      }
-      else {
-        console.log('No interpretations found for testId:', this.testId);
-      }
+  route = inject(ActivatedRoute);
+  sessionStorage = inject(SessionStorageService);
+  mode: string = '';
+  testContextService = inject(TestContextService);
 
-      this.testState = this.resourceService.testResource.value()?.state ?? null;
-      console.log('Test state:', this.testState);
-      
-    });
+  async ngOnInit(): Promise<void> {
+  this.testContextService.resetContext();
+
+  const idParam = this.route.snapshot.paramMap.get('testId');
+  const mode = this.route.snapshot.paramMap.get('mode') || 'new';
+  const storedId = this.sessionStorage.getTestId();
+  const id = idParam ? Number(idParam) : storedId;
+
+  if (!id) {
+    console.warn('[TestInterpretationsComponent] No test ID found');
+    return;
   }
+
+  this.testId = id;
+  this.mode = mode;
+  this.sessionStorage.setTestId(id);
+
+  await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode));
+
+  this.testContextService.getTest().subscribe(test => {
+    this.testState = test?.state ?? null;
+    this.testId = test?.id ?? this.testId;
+  });
+
+  this.testContextService.getScales().subscribe(scales => {
+    if (scales) {
+      console.log('Scales received:', scales);
+      this.scales = scales;
+      this.initializeInterpretationForms(scales);
+    }
+  });
+
+  this.testContextService.getInterpretations().subscribe(interpretations => {
+    if (interpretations) {
+      console.log('Interpretations received:', interpretations);
+      this.testInterpretations = interpretations;
+      this.patchInterpretationsToForm(interpretations);
+    } else {
+      console.log('No interpretations found for testId:', this.testId);
+    }
+  });
+}
+
+
 
   interpretationsPerScale: {[scaleId: number]: FormArray<FormGroup>} = {};
 
@@ -134,46 +160,44 @@ cleanExtraInterpretations() {
   }
 }
 
-onSave() {
-  this.cleanExtraInterpretations();
-  const allData = Object.entries(this.interpretationsPerScale).flatMap(([scaleId, formArray]) => {
-    const selected = this.selectedLevels[+scaleId];
+  async onSave(): Promise<void> {
+    this.cleanExtraInterpretations();
 
-    return formArray.controls
-      .filter(ctrl => ctrl.get('level')?.value <= selected)
-      .map(ctrl => ctrl.value);
-  });
-
-  console.log('Submitting only active data:', allData);
-  // change for first value from
-  if(!this.testInterpretations || this.testInterpretations.length === 0) {
-    this.testService.saveInterpretationsBatch(allData).subscribe({
-      next: (interpretations) => {
-        console.log('Interpretations saved successfully:', interpretations);
-      }
-      , error: (error) => {
-        console.error('Error saving interpretations:', error);
-      }
+    const allData = Object.entries(this.interpretationsPerScale).flatMap(([scaleId, formArray]) => {
+      const selected = this.selectedLevels[+scaleId];
+      return formArray.controls
+        .filter(ctrl => ctrl.get('level')?.value <= selected)
+        .map(ctrl => ctrl.value);
     });
 
-    if(this.testState && this.testState.currentStep < 8) {
-      this.testState.currentStep = 8;
-      this.testState.state = 'active';
-      this.testService.updateTestStateStep(this.testId!, this.testState).subscribe({
-        next: (state) => {
-          console.log('Test state updated successfully:', state);
-        },
-        error: (error) => {
-          console.error('Error updating test state:', error);
+    console.log('📤 Submitting only active data:', allData);
+
+    if (!this.testInterpretations || this.testInterpretations.length === 0) {
+      try {
+        const saved = await firstValueFrom(this.testService.saveInterpretationsBatch(allData));
+        console.log('Interpretations saved successfully:', saved);
+
+        if (this.testState && this.testState.currentStep < 8) {
+          this.testState.currentStep = 8;
+          this.testState.state = 'active';
+
+          const updatedState = await firstValueFrom(
+            this.testService.updateTestStateStep(this.testId!, this.testState)
+          );
+          console.log('Test state updated successfully:', updatedState);
+
+          await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit'));
+          this.router.navigate(['/test-interpretations/edit', this.testId]);
         }
-      });
+      } catch (error) {
+        console.error('Error saving interpretations or updating test state:', error);
+        this.toast?.show?.({ message: 'Failed to save interpretations', type: 'error' });
+      }
+    } else {
+      console.warn('⚠️ Interpretations already exist, skipping save');
     }
   }
-  else {
-    console.error('No interpretations to save or testInterpretations is empty');
-  }
 
-}
 
 onUpdate() {
     this.cleanExtraInterpretations();
@@ -243,10 +267,12 @@ patchInterpretationsToForm(incoming: Interpretation[]) {
     return Array.from({ length: currentStep }, (_, i) => i + 1);
   }
 
-  onStepSelected(step: number) {
-    if (!this.testId || !stepRoutes[step]) return;
-    this.router.navigate(stepRoutes[step](this.testId));
-  }
+onStepSelected(step: number) {
+  console.log('[onStepSelected] Called with step:', step);
+  console.log('[onStepSelected] Current testId:', this.testId);
+  if (!this.testId || !stepRoutes[step]) return;
+  this.router.navigate(stepRoutes[step](this.testId));
+}
 toast = inject(ToastService);
   async changeStatus() {
     if (!this.testId || !this.testState) return;

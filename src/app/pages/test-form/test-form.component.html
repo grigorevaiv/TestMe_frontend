@@ -1,11 +1,12 @@
 
 <div class="min-h-screen bg-white pt-6 p-4 sm:px-6 lg:px-8">
-<app-progress-bar   
+<app-progress-bar 
+    *ngIf="testState"  
     [step]="step"
     [totalSteps]="8"
     [completedSteps]="completedStepsArray"
     (stepClicked)="onStepSelected($event)"
-    [maxAllowedStep]="(testState?.currentStep ?? step) + 1"
+    [maxAllowedStep]="testState.currentStep"
     ></app-progress-bar>
   <div class="max-w-3xl mx-auto">
     <h1 class="text-xl sm:text-2xl font-semibold text-gray-800 mb-4">Create a new test</h1>
@@ -86,7 +87,7 @@
         <button
           class="w-full sm:w-auto bg-sky-700 hover:bg-sky-800 text-white text-sm sm:text-base md:text-lg font-medium px-6 py-2 rounded transition disabled:bg-gray-400 disabled:cursor-not-allowed"
           (click)="saveTest(true)">
-          Next →
+          Save and proceed →
         </button>
       </div>
     </form>

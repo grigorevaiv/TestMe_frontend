@@ -1,10 +1,11 @@
 <div class="min-h-screen bg-white pt-6 p-4 sm:px-6 lg:px-8">
-<app-progress-bar   
+<app-progress-bar
+    *ngIf="testState"   
     [step]="step"
     [totalSteps]="8"
     [completedSteps]="completedStepsArray"
     (stepClicked)="onStepSelected($event)"
-    [maxAllowedStep]="(testState?.currentStep ?? step) + 1"
+    [maxAllowedStep]="testState.currentStep"
     ></app-progress-bar>
   <div class="max-w-7xl mx-auto">
 
@@ -134,7 +135,7 @@
                   (click)="saveTest()">Save test</button>
                 <button
                   class="bg-sky-700 hover:bg-sky-800 text-white font-medium px-6 py-2 rounded disabled:bg-sky-400"
-                  (click)="saveTest(true)">Next →</button>
+                  (click)="saveTest(true)">Save and proceed →</button>
               </div>
             </div>
           }
@@ -144,30 +145,40 @@
 
       <!-- Правая колонка: список блоков -->
       <div class="w-full lg:w-1/2 border-l border-gray-200 pl-4">
-        <h1 class="text-xl sm:text-2xl font-semibold text-gray-800 mb-6">Current blocks</h1>
-@if(allBlocks.length === 0) {
-  <p class="text-gray-500 sm:text-lg md:text-xl font-medium">
-    No blocks defined yet, please add test blocks
-  </p>
-} @else {
-  <div class="flex flex-col gap-4">
-    @for(block of allBlocks; track block.id ?? block.name) {
-      <app-list-item
-        [item]="block" type="block"
-        (edit)="onEditBlock(block)"
-        (delete)="confirmDelete(block)"
-        [isEditing]="isEditing"
-      ></app-list-item>
+        <h1 class="text-xl sm:text-2xl font-semibold text-gray-800 mb-6">Blocks list</h1>
+        @if(allBlocks.length === 0) {
+          <p class="text-gray-500 sm:text-lg md:text-xl font-medium">
+            No blocks defined yet, please add blocks to the list and save the test to proceed
+          </p>
+        } @else {
+        <div class="flex flex-col gap-4">
+          @for(block of allBlocks; track block.id ?? block.name; let i = $index) {
 
-      <app-confirm-dialog
-        [visible]="showDeleteDialog"
-        [message]="'Are you sure you want to delete this block?'"
-        (confirm)="handleDeleteConfirmed()"
-        (cancel)="handleDeleteCancelled()">
-      </app-confirm-dialog>
-    }
-  </div>
-}
+
+            @if(!block.id && (i === 0 || allBlocks[i - 1]?.id)) {
+              <hr class="my-2 border-t border-gray-300" />
+              <h2 class="text-gray-600 text-base font-semibold uppercase tracking-wide">Unsaved blocks</h2>
+              <p class="text-red-500">Note, that if you don't save the test, these blocks won't be saved</p>
+            }
+
+            <app-list-item
+              [item]="block"
+              type="block"
+              (edit)="onEditBlock(block)"
+              (delete)="confirmDelete(block)"
+              [isEditing]="isEditing"
+            ></app-list-item>
+
+            <app-confirm-dialog
+              [visible]="showDeleteDialog"
+              [message]="'Are you sure you want to delete this block?'"
+              (confirm)="handleDeleteConfirmed()"
+              (cancel)="handleDeleteCancelled()">
+            </app-confirm-dialog>
+          }
+        </div>
+
+        }
 
 
       </div>

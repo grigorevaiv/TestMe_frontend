@@ -8,6 +8,11 @@ import { TestInterpretationsComponent } from './pages/test-interpretations/test-
 import { TestNormsComponent } from './pages/test-norms/test-norms.component';
 import { TestQuestionsComponent } from './pages/test-questions/test-questions.component';
 import { TestWeightsComponent } from './pages/test-weights/test-weights.component';
+import { PlayTestComponent } from './patient/components/play-test/play-test.component';
+import { PatientsComponent } from './pages/patients/patients.component';
+import { AddPatientComponent } from './pages/add-patient/add-patient.component';
+import { ViewResultsComponent } from './pages/view-results/view-results.component';
+import { VerifyEmailComponent } from './pages/verify-email/verify-email.component';
 
 export const routes: Routes = [
   {
@@ -77,6 +82,30 @@ export const routes: Routes = [
   {
     path: 'test-norms/:mode/:testId',
     component: TestNormsComponent
+  },
+    {
+    path: 'play-test/:token/verify',
+    component: VerifyEmailComponent
+  },
+  {
+    path: 'play-test/:token',
+    component: PlayTestComponent
+  },
+  {
+    path: 'patients',
+    component: PatientsComponent
+  },
+  {
+    path: 'patient/new',
+    component: AddPatientComponent
+  },
+  {
+    path: 'patient/edit/:patientId',
+    component: AddPatientComponent
+  },
+  {
+    path: 'patient/history/:patientId',
+    component: ViewResultsComponent
   }
 ];
 

@@ -5,11 +5,13 @@ import { firstValueFrom } from 'rxjs';
 import { Norm, Scale, Weight } from '../../interfaces/test.interface';
 import { TestService } from '../../services/test.service';
 import { ResourceService } from '../../services/resource.service';
-import { CacheService } from '../../services/cache.service';
+//import { CacheService } from '../../services/cache.service';
 import { ToastService } from '../../services/toast.service';
 import { NgIf } from '@angular/common';
 import { ProgressBarComponent } from '../../components/progress-bar/progress-bar.component';
 import { stepRoutes } from '../../constants/step-routes';
+import { SessionStorageService } from '../../services/session-storage.service';
+import { TestContextService } from '../../services/test-context.service';
 
 @Component({
   selector: 'app-test-norms',
@@ -23,7 +25,8 @@ export class TestNormsComponent {
   fb = inject(FormBuilder);
   router = inject(Router);
   route = inject(ActivatedRoute);
-  cacheService = inject(CacheService);
+  //cacheService = inject(CacheService);
+  sessionStorage = inject(SessionStorageService);
 
 
   mode: string = '';
@@ -34,48 +37,60 @@ export class TestNormsComponent {
   weights: Weight[] = [];
   toast = inject(ToastService);
   step =7;
+  testContextService = inject(TestContextService);
 
-  constructor() {
-    effect(() => {
-      this.initializeRouteParams();
-      this.testState = this.resourceService.testResource.value()?.state ?? null;
-      const norms = this.resourceService.normsResource.value();
-      const scales = this.resourceService.scalesResource.value();
-      const weights = this.resourceService.weightsResource.value();
-      if (norms) {
-        this.norms = norms;
-        console.log('Norms received:', this.norms);
-      }
+  async ngOnInit(): Promise<void> {
+    this.testContextService.resetContext();
+
+    const idParam = this.route.snapshot.paramMap.get('testId');
+    const mode = this.route.snapshot.paramMap.get('mode') || 'new';
+    const storedId = this.sessionStorage.getTestId();
+    const id = idParam ? Number(idParam) : storedId;
+
+    if (!id) {
+      console.warn('[TestNormsComponent] No test ID found');
+      return;
+    }
+
+    this.testId = id;
+    this.mode = mode;
+    this.sessionStorage.setTestId(id);
+
+    await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode));
+
+    this.testContextService.getTest().subscribe(test => {
+      this.testState = test?.state ?? null;
+      this.testId = test?.id ?? this.testId;
+    });
+
+    this.testContextService.getScales().subscribe(scales => {
       if (scales) {
+        console.log('Scales received:', scales);
         this.scales = scales;
-        console.log('Scales received:', this.scales);
         this.initializeNormsForms();
-        if(this.norms) {
-          this.patchNormsToForm(this.norms);
-        }
-      }
-      if (weights) {
-        this.weights = weights;
-        console.log('Weights received:', this.weights);
       }
     });
-  }
-  
-  normsForScale: {[scaleId: number]: FormGroup} = {};
 
-    private initializeRouteParams() {
-    this.route.paramMap.subscribe(async (params) => {
-      this.mode = params.get('mode') || 'new';
-      const id = params.get('testId');
-      if (id) {
-        this.testId = Number(id);
-        this.cacheService.saveToCache('testId', this.testId);
+    this.testContextService.getNorms().subscribe(norms => {
+      if (norms) {
+        console.log('Norms received:', norms);
+        this.norms = norms;
+        this.patchNormsToForm(norms);
       } else {
-        this.testId = await this.cacheService.getFromCache('testId');
+        console.log('No norms found for testId:', this.testId);
       }
-      console.log('Test ID (answers:)', this.testId); 
+    });
+
+    this.testContextService.getWeights().subscribe(weights => {
+      if (weights) {
+        console.log('Weights received:', weights);
+        this.weights = weights;
+      }
     });
   }
+
+
+  normsForScale: {[scaleId: number]: FormGroup} = {};
 
   initializeNormsForms() {
     this.scales.forEach((scale: Scale) => {
@@ -213,9 +228,11 @@ setTheoreticalNorms(scaleId: number) {
       
       if (!this.norms || this.norms.length === 0){
         savedNorms = await this.createNorms();
-        if(this.testState.currentStep <= 6) {
+        if(this.testState.currentStep < 7) {
           this.testState.currentStep = 7;
           this.testService.updateTestStateStep(this.testId!, this.testState);
+          await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit'));
+          this.router.navigate(['/test-norms/edit', this.testId]); 
         }
       }
       

@@ -13,11 +13,27 @@ export class ValidationService {
     if (control.hasError('required')) return `${fieldName} field is required`;
     if (control.hasError('minlength')) return `${fieldName} must be at least ${control.errors?.['minlength'].requiredLength} characters long`;
     if (control.hasError('min')) return `${fieldName} must be at least ${control.errors?.['min'].min}`;
+      if (control.hasError('email')) {
+    return `Please enter a valid email (example: user@example.com)`;
+  }
+    if (control.hasError('pattern')) {
+    if (fieldName === 'phone') {
+      return `Phone number must be in international format (e.g. +1234567890)`;
+    }
+      return `Invalid ${this.formatFieldName(fieldName)} format`;
+    }
     if (control.hasError('formIncomplete')) {
       return `Please fill out all the fields.`;
     }
     return null;
   }
+
+    private formatFieldName(fieldName: string): string {
+    return fieldName
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/^./, str => str.toUpperCase());
+  }
+
 
   everythingFilledValidator(control: AbstractControl): ValidationErrors | null {
     if (!control || !(control instanceof FormArray)) return null;

@@ -1,7 +1,7 @@
 import { Component, effect, ElementRef, inject, QueryList, ViewChildren } from '@angular/core';
 import { FormBuilder, FormControl, FormGroup, NgModel, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { CacheService } from '../../services/cache.service';
+//import { CacheService } from '../../services/cache.service';
 import { TestService } from '../../services/test.service';
 import { ResourceService } from '../../services/resource.service';
 import { Answer, Block, Question, Scale, Weight } from '../../interfaces/test.interface';
@@ -11,6 +11,8 @@ import { ValidationService } from '../../services/validation.service';
 import { ToastService } from '../../services/toast.service';
 import { ProgressBarComponent } from '../../components/progress-bar/progress-bar.component';
 import { stepRoutes } from '../../constants/step-routes';
+import { SessionStorageService } from '../../services/session-storage.service';
+import { TestContextService } from '../../services/test-context.service';
 
 @Component({
   selector: 'app-test-weights',
@@ -22,12 +24,14 @@ export class TestWeightsComponent {
   router = inject(Router);
   route = inject(ActivatedRoute);
   testService = inject(TestService);
-  cacheService = inject(CacheService);
+  //cacheService = inject(CacheService);
+  sessionStorage = inject(SessionStorageService);
   resourceService = inject(ResourceService);
   validationService = inject(ValidationService);
   fb = inject(FormBuilder);
   toast = inject(ToastService);
   step = 6;
+  testContextService = inject(TestContextService);
   
   blocks: Block[] = [];
   scales: Scale[] = [];
@@ -50,49 +54,55 @@ export class TestWeightsComponent {
   } = {};
 
 
-constructor() {
-  this.initializeRouteParams();
+async ngOnInit(): Promise<void> {
+  this.testContextService.resetContext();
 
-  effect(() => {
-    const blocks = this.resourceService.blocksResource.value();
-    const scales = this.resourceService.scalesResource.value();
-    const questions = this.resourceService.questionsResource.value();
-    const answers = this.resourceService.answersResource.value();
-    const weights = this.resourceService.weightsResource.value();
-    const test = this.resourceService.testResource.value();
+  const idParam = this.route.snapshot.paramMap.get('testId');
+  const mode = this.route.snapshot.paramMap.get('mode') || 'new';
+  const storedId = this.sessionStorage.getTestId();
+  const id = idParam ? Number(idParam) : storedId;
 
-    // 👉 Ждём, пока всё загрузится
-    if (!blocks || !scales || !questions || !answers || !test) return;
+  if (!id) {
+    console.warn('[TestWeightsComponent] No test ID found');
+    return;
+  }
 
-    // ✅ Всё есть — теперь сохраняем и инициализируем
-    this.blocks = blocks;
-    this.scales = scales;
-    this.questions = questions;
-    this.answers = answers;
+  this.testId = id;
+  this.mode = mode;
+
+  await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode));
+
+  this.testContextService.getTest().subscribe(test => {
+    this.testState = test?.state ?? null;
+  });
+
+  this.testContextService.getBlocks().subscribe(blocks => {
+    this.blocks = blocks || [];
+  });
+
+  this.testContextService.getScales().subscribe(scales => {
+    this.scales = scales || [];
+  });
+
+  this.testContextService.getQuestions().subscribe(questions => {
+    this.questions = questions || [];
+  });
+
+  this.testContextService.getAnswers().subscribe(answers => {
+    this.answers = answers || [];
+    this.initializeWeightsForms();  // тут инициализация уже после всех данных
+  });
+
+  this.testContextService.getWeights().subscribe(weights => {
     this.weights = weights || [];
-    this.testState = test.state ?? null;
-
-    this.initializeWeightsForms();
-
-    if (this.weights.length > 0) {
-      this.patchWeightsToForm(this.weights);
-    }
+    this.patchWeightsToForm(this.weights); // и патч после
   });
 }
+
 
   get completedStepsArray(): number[] {
     const currentStep = this.testState?.currentStep ?? 0;
     return Array.from({ length: currentStep }, (_, i) => i + 1);
-  }
-  private initializeRouteParams() {
-    this.route.paramMap.subscribe(async (params) => {
-      this.mode = params.get('mode') || 'new';
-      const id = params.get('testId');
-      this.testId = id ? Number(id) : await this.cacheService.getFromCache('testId');
-      if (this.testId) {
-        this.cacheService.saveToCache('testId', this.testId);
-      }
-    });
   }
 
   questionGroups: {
@@ -157,7 +167,7 @@ patchWeightsToForm(weights: any[]): void {
           id: id ?? null
         });
         patched = true;
-        break; // найден — дальше не ищем
+        break; 
       }
     }
 
@@ -195,22 +205,22 @@ onExclusiveCheck(
     const ctrl = this.getWeightControl(blockId, scaleId, answer.id!);
     const currentValue = ctrl.get('value')?.value;
 
-    // Выбранный ответ
+    
     if (answer.id === selectedAnswerId) {
       if (currentValue === value) {
-        ctrl.get('value')?.setValue(0); // снять
+        ctrl.get('value')?.setValue(0); 
       } else {
-        ctrl.get('value')?.setValue(value); // поставить
+        ctrl.get('value')?.setValue(value); 
       }
     } else if (isSingle) {
-      // Сброс других при single-choice
+      
       if (!isBipolar) {
-        // Для однополюсной — сбрасываем если было 1
+        
         if (ctrl.get('value')?.value === 1) {
           ctrl.get('value')?.setValue(0);
         }
       } else {
-        // Для биполярной — сбрасываем и -1 и 1
+        
         if (ctrl.get('value')?.value === -1 || ctrl.get('value')?.value === 1) {
           ctrl.get('value')?.setValue(0);
         }
@@ -246,7 +256,7 @@ onExclusiveCheck(
     return this.answers.filter(a => a.questionId === questionId);
   }
 
-collectWeights(): {
+collectWeights(includeZeros = false): {
   id?: number;
   answerId: number;
   scaleId: number;
@@ -265,10 +275,9 @@ collectWeights(): {
         const value = group.get('value')?.value ?? 0;
         const id = group.get('id')?.value;
 
-        // Добавляем, только если вес есть (или он уже был сохранён)
-        if (value !== 0 || id !== null) {
+        if (includeZeros || value !== 0 || id !== null) {
           result.push({
-            id: id ?? undefined, // undefined = новый
+            id: id ?? undefined,
             answerId: +answerId,
             scaleId: +scaleId,
             value: value
@@ -282,7 +291,6 @@ collectWeights(): {
 }
 
 
-// ПОТЕРЯЛИ ПРОВЕРКУ ШКАЛЫ
 async saveWeights(navigate: boolean = false): Promise<void> {
   const validation = this.validateAllQuestions();
 
@@ -302,7 +310,7 @@ async saveWeights(navigate: boolean = false): Promise<void> {
     return;
   }
 
-  const collected = this.collectWeights();
+  const collected = this.collectWeights(true);
   const toCreate = collected.filter(w => w.id === undefined);
   const toUpdate = collected.filter(w => w.id !== undefined);
 
@@ -325,12 +333,14 @@ async saveWeights(navigate: boolean = false): Promise<void> {
     return;
   }
 
-  if (this.testState && this.testState.currentStep < 6) {
-    this.testState.currentStep = 6;
+  if (this.testState && this.testState.currentStep < 7) {
+    this.testState.currentStep = 7;
     this.testState = await firstValueFrom(
       this.testService.updateTestStateStep(this.testId!, this.testState)
     );
     console.log('Test state updated to step 6:', this.testState);
+    await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit'));
+    this.router.navigate(['/test-weights/edit', this.testId]); 
   }
 
   this.resourceService.triggerRefresh();

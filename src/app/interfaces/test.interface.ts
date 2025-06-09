@@ -47,7 +47,7 @@ export interface Question {
     isActive: boolean;
     hasImage?: boolean;
     blockId: number;
-    realId?: number; // вот для которые уже есть в базе, но не в тесте
+    realId?: number;
 }
 
 export interface Answer {
@@ -85,4 +85,27 @@ export interface Tag {
 
 export interface QuestionWithTags extends Question {
   tagsIds: number[];
+}
+
+export interface User {
+    id?: number;
+    firstName: string;
+    lastName: string;
+    birthDate: string;
+    isActive?: boolean;
+    email: string;
+    assignedToAdmin: number;
+}
+
+export interface InvitationPayload {
+  userId: number;
+  userEmail: string;
+  testId: number;
+}
+
+export interface TestSession {
+  testId: number;
+  userId: number;
+  email: string;
+  token: string;
 }

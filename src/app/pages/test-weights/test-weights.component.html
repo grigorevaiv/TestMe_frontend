@@ -1,10 +1,11 @@
 <div class="min-h-screen bg-white pt-6 p-4 sm:px-6 lg:px-8">
     <app-progress-bar
+    *ngIf="testState"
     [step]="step"
     [totalSteps]="8"
     [completedSteps]="completedStepsArray"
     (stepClicked)="onStepSelected($event)"
-    [maxAllowedStep]="(testState?.currentStep ?? step) + 1"
+    [maxAllowedStep]="testState.currentStep"
   ></app-progress-bar>
   <div class="w-2/3 max-w-4xl mx-auto">
   <h1 class="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-gray-800 mb-4 font-header">Define weights</h1>
@@ -19,8 +20,8 @@
           [attr.data-question-id]="question.id" 
             (focusout)="onQuestionFocusOut($event, block.id!, question.id!)"
             [ngClass]="{
-  'border-red-500': invalidQuestions.includes(question.id!) || hasInvalidGradualScale(block.id!, question.id!)
-}"
+    'border-red-500': invalidQuestions.includes(question.id!) || hasInvalidGradualScale(block.id!, question.id!)
+  }"
 
           >
           <h3 class="text-lg font-semibold text-gray-800 mb-3">{{ question.text }}</h3>

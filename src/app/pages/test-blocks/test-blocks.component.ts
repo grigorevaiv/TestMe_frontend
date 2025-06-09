@@ -16,10 +16,12 @@ import { ConfirmDialogComponent } from '../../components/confirm-dialog/confirm-
 import { ProgressBarComponent } from '../../components/progress-bar/progress-bar.component';
 import { stepRoutes } from '../../constants/step-routes';
 import { SessionStorageService } from '../../services/session-storage.service';
+import { TestContextService } from '../../services/test-context.service';
+import { NgIf } from '@angular/common';
 
 @Component({
   selector: 'app-test-blocks',
-  imports: [ReactiveFormsModule, SentencecasePipe, ListItemComponent, ConfirmDialogComponent, ProgressBarComponent],
+  imports: [ReactiveFormsModule, SentencecasePipe, ListItemComponent, ConfirmDialogComponent, ProgressBarComponent, NgIf],
   templateUrl: './test-blocks.component.html',
   styleUrl: './test-blocks.component.css'
 })
@@ -33,6 +35,7 @@ export class TestBlocksComponent {
   private validationService = inject(ValidationService);
   resourceService = inject(ResourceService);
   toast = inject(ToastService);
+  private testContextService = inject(TestContextService);
 
   private routeParamSubscription: any;
   private testId: number | null = null;
@@ -61,51 +64,47 @@ export class TestBlocksComponent {
     testId: this.testId
   });
 
-constructor() {
-  // 1. Инициализация параметров сразу и безопасно
-  const idParam = this.route.snapshot.paramMap.get('testId');
-  const storedId = this.sessionStorage.getTestId();
-  console.log('📍 Test ID from URL:', idParam);
-  console.log('📍 Test ID from sessionStorage:', storedId);
-  this.mode = this.route.snapshot.paramMap.get('mode') || 'new';
 
-  const id = idParam ? Number(idParam) : storedId;
-  console.log('📍 Final Test ID:', id);
+  async ngOnInit(): Promise<void> {
+    this.testContextService.resetContext();
+    const idParam = this.route.snapshot.paramMap.get('testId');
+    const mode = this.route.snapshot.paramMap.get('mode') || 'new';
+    const storedId = this.sessionStorage.getTestId();
+    const id = idParam ? Number(idParam) : storedId;
 
-  if (!id) {
-    console.warn('[constructor] testId not found in URL or sessionStorage');
-    return; // 💥 стопаем всё, без смысла продолжать
-  }
-
-  this.testId = id;
-  this.sessionStorage.setTestId(id);
-
-  // 2. Тригерим загрузку ресурсов
-  this.resourceService.triggerRefresh();
-
-  // 3. Эффект: работаем только когда данные уже точно есть
-  effect(() => {
-    const test = this.resourceService.testResource.value();
-    const blocks = this.resourceService.blocksResource.value();
-
-    if (test) {
-      this.testState = test.state ?? null;
-      console.log('📍 Test state:', this.testState);
+    if (!id) {
+      console.warn('[TestBlocksComponent] No test ID found');
+      return;
     }
 
-    this.blocks = blocks || [];
-  });
+    this.testId = id;
+    this.mode = mode;
+
+    await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode));
+
+    this.testContextService.getTest().subscribe(test => {
+      if (test) {
+        this.testState = test.state ?? null;
+      }
+    });
+
+    this.testContextService.getBlocks().subscribe(blocks => {
+      this.blocks = blocks || [];
+    });
+
+    this.addValidatorsToForm();
+    window.addEventListener('beforeunload', this.beforeUnloadHandler.bind(this));
+  }
+
+  beforeUnloadHandler(event: BeforeUnloadEvent) {
+  if (this.pendingBlocks.length > 0) {
+    event.preventDefault();
+    event.returnValue = 'You have unsaved blocks. Are you sure you want to leave?';
+    return event;
+  }
+  return;
 }
 
-
-  get completedStepsArray(): number[] {
-    const currentStep = this.testState?.currentStep ?? 0;
-    return Array.from({ length: currentStep }, (_, i) => i + 1);
-  }
-
-  ngOnInit(): void {
-    this.addValidatorsToForm();
-  }
 
   private addValidatorsToForm() {
     this.newBlockForm.get('hasTimeLimit')?.valueChanges.subscribe((hasTimeLimit) => {
@@ -116,6 +115,11 @@ constructor() {
       }
       this.newBlockForm.get('timeLimit')?.updateValueAndValidity();
     });
+  }
+
+  get completedStepsArray(): number[] {
+    const currentStep = this.testState?.currentStep ?? 0;
+    return Array.from({ length: currentStep }, (_, i) => i + 1);
   }
 
   addNewBlock() {
@@ -130,7 +134,7 @@ constructor() {
 
     const newBlock = this.prepareBlockForSaving();
     this.pendingBlocks.push(newBlock);
-    this.toast.show({ message: 'Block added to test', type: 'info' });
+    this.toast.show({ message: 'Block added to list', type: 'info' });
 
     this.resetToDefault();
     this.isBlockFormActive = false;
@@ -163,26 +167,26 @@ constructor() {
     return this.newBlockForm.value as Block;
   }
 
-onEditBlock(block: Block): void {
-  const isPending = !block.id;
-  this.newBlockForm.patchValue({
-    name: block.name,
-    instructions: block.instructions,
-    hasTimeLimit: block.hasTimeLimit,
-    randomizeQuestions: block.randomizeQuestions,
-    randomizeAnswers: block.randomizeAnswers,
-    numberOfQuestions: block.numberOfQuestions,
-    questionsType: block.questionsType,
-    numberOfAnswers: block.numberOfAnswers,
-    timeLimit: block.timeLimit,
-  });
+  onEditBlock(block: Block): void {
+    const isPending = !block.id;
+    this.newBlockForm.patchValue({
+      name: block.name,
+      instructions: block.instructions,
+      hasTimeLimit: block.hasTimeLimit,
+      randomizeQuestions: block.randomizeQuestions,
+      randomizeAnswers: block.randomizeAnswers,
+      numberOfQuestions: block.numberOfQuestions,
+      questionsType: block.questionsType,
+      numberOfAnswers: block.numberOfAnswers,
+      timeLimit: block.timeLimit,
+    });
 
-  this.editingBlockId = block.id ?? null;
-  this.isEditing = true;
+    this.editingBlockId = block.id ?? null;
+    this.isEditing = true;
 
 
-  this.selectedBlock = block;
-}
+    this.selectedBlock = block;
+  }
 
 
   onDeleteBlock(block: Block): void {
@@ -200,26 +204,26 @@ onEditBlock(block: Block): void {
     this.showDeleteDialog = true;
   }
 
-handleDeleteConfirmed() {
-  if (!this.selectedBlock) return;
+  handleDeleteConfirmed() {
+    if (!this.selectedBlock) return;
 
-  const block = this.selectedBlock;
+    const block = this.selectedBlock;
 
-  if (!block.id) {
- 
-    this.pendingBlocks = this.pendingBlocks.filter(b => b !== block);
-    this.toast.show({ message: 'Pending block removed', type: 'info' });
-  } else if (this.testId) {
+    if (!block.id) {
+  
+      this.pendingBlocks = this.pendingBlocks.filter(b => b !== block);
+      this.toast.show({ message: 'Block removed', type: 'info' });
+    } else if (this.testId) {
 
-    this.testService.deleteBlock(this.testId, block.id).subscribe(() => {
-      this.toast.show({ message: 'Block deleted', type: 'success' });
-      this.resourceService.triggerRefresh();
-    });
+      this.testService.deleteBlock(this.testId, block.id).subscribe(() => {
+        this.toast.show({ message: 'Block deleted', type: 'success' });
+        this.resourceService.triggerRefresh();
+      });
+    }
+
+    this.showDeleteDialog = false;
+    this.selectedBlock = null;
   }
-
-  this.showDeleteDialog = false;
-  this.selectedBlock = null;
-}
 
 
   handleDeleteCancelled() {
@@ -228,50 +232,48 @@ handleDeleteConfirmed() {
     this.isBlockFormActive = false;
   }
 
-async updateBlock() {
-  if (!this.selectedBlock) return;
+  async updateBlock() {
+    if (!this.selectedBlock) return;
+    const rawForm = this.newBlockForm.value;
 
+    const cleanedForm: Partial<Block> = {
+      name: rawForm.name ?? '',
+      instructions: rawForm.instructions ?? '',
+      hasTimeLimit: rawForm.hasTimeLimit ?? false,
+      timeLimit: rawForm.timeLimit ?? 0,
+      randomizeQuestions: rawForm.randomizeQuestions ?? false,
+      randomizeAnswers: rawForm.randomizeAnswers ?? false,
+      numberOfQuestions: rawForm.numberOfQuestions ?? 0,
+      questionsType: rawForm.questionsType ?? 'single-choice',
+      numberOfAnswers: rawForm.numberOfAnswers ?? 0,
+    };
 
-  const rawForm = this.newBlockForm.value;
+    const updatedBlock: Block = {
+      ...this.selectedBlock,
+      ...cleanedForm,
+    };
 
-  const cleanedForm: Partial<Block> = {
-    name: rawForm.name ?? '',
-    instructions: rawForm.instructions ?? '',
-    hasTimeLimit: rawForm.hasTimeLimit ?? false,
-    timeLimit: rawForm.timeLimit ?? 0,
-    randomizeQuestions: rawForm.randomizeQuestions ?? false,
-    randomizeAnswers: rawForm.randomizeAnswers ?? false,
-    numberOfQuestions: rawForm.numberOfQuestions ?? 0,
-    questionsType: rawForm.questionsType ?? 'single-choice',
-    numberOfAnswers: rawForm.numberOfAnswers ?? 0,
-  };
+    if (!this.selectedBlock.id) {
 
-  const updatedBlock: Block = {
-    ...this.selectedBlock,
-    ...cleanedForm,
-  };
+      const index = this.pendingBlocks.findIndex(b => b === this.selectedBlock);
+      if (index !== -1) {
+        this.pendingBlocks[index] = updatedBlock;
+        this.toast.show({ message: 'Block updated', type: 'success' });
+      }
+    } else if (this.testId) {
 
-  if (!this.selectedBlock.id) {
-
-    const index = this.pendingBlocks.findIndex(b => b === this.selectedBlock);
-    if (index !== -1) {
-      this.pendingBlocks[index] = updatedBlock;
-      this.toast.show({ message: 'Pending block updated', type: 'success' });
+      updatedBlock.testId = this.testId;
+      await firstValueFrom(
+        this.testService.updateBlock(this.testId, updatedBlock.id!, updatedBlock)
+      );
+      this.toast.show({ message: 'Block updated successfully!', type: 'success' });
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit'));
     }
-  } else if (this.testId) {
 
-    updatedBlock.testId = this.testId;
-    await firstValueFrom(
-      this.testService.updateBlock(this.testId, updatedBlock.id!, updatedBlock)
-    );
-    this.toast.show({ message: 'Block updated successfully!', type: 'success' });
-    this.resourceService.triggerRefresh();
+    this.resetToDefault();
+    this.isEditing = false;
+    this.selectedBlock = null;
   }
-
-  this.resetToDefault();
-  this.isEditing = false;
-  this.selectedBlock = null;
-}
 
 
   cancelEdit() {
@@ -280,38 +282,42 @@ async updateBlock() {
     this.resetToDefault();
   }
 
-async saveTest(navigate: boolean = false): Promise<void> {
-  console.log('Saving test with ID:', this.testId);
-  console.log('Pending blocks:', this.pendingBlocks);
-  console.log('Current blocks:', this.blocks);
-  console.log('Test id:', this.testId);
-  if (this.isEditing) {
-    this.toast.show({ message: 'Finish editing the block before saving the test.', type: 'warning' });
-    return;
+  async saveTest(navigate: boolean = false): Promise<void> {
+    console.log('Saving test with ID:', this.testId);
+    console.log('Pending blocks:', this.pendingBlocks);
+    console.log('Current blocks:', this.blocks);
+    console.log('Test id:', this.testId);
+    if (this.isEditing) {
+      this.toast.show({ message: 'Finish editing the block before saving the test', type: 'warning' });
+      return;
+    }
+
+    if (this.pendingBlocks.length === 0 && this.blocks.length === 0) {
+      this.toast.show({ message: 'You must add at least one block to save the test', type: 'warning' });
+      return;
+    }
+
+    if (!this.testState || !this.testId) return;
+
+    if (this.pendingBlocks.length > 0) {
+      await firstValueFrom(this.testService.addBlocksBatch(this.testId, this.pendingBlocks));
+      this.toast.show({ message: 'All blocks saved', type: 'success' });
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode));
+      this.pendingBlocks = [];
+    }
+
+    if (this.testState.currentStep < 2) {
+      this.testState.currentStep = 2;
+      await firstValueFrom(this.testService.updateTestStateStep(this.testId, this.testState));
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit'));
+      this.router.navigate(['/test-blocks/edit', this.testId]);
+      return;
+    }
+
+    this.resourceService.triggerRefresh();
+
+    if (navigate) this.handleNavigation(this.testState);
   }
-
-  if (this.pendingBlocks.length === 0 && this.blocks.length === 0) {
-    this.toast.show({ message: 'You must add at least one block to save the test.', type: 'warning' });
-    return;
-  }
-
-  if (!this.testState || !this.testId) return;
-
-  if (this.pendingBlocks.length > 0) {
-    await firstValueFrom(this.testService.addBlocksBatch(this.testId, this.pendingBlocks));
-    this.toast.show({ message: 'All blocks saved!', type: 'success' });
-    this.pendingBlocks = [];
-  }
-
-  if (this.testState.currentStep < 2) {
-    this.testState.currentStep = 2;
-    await firstValueFrom(this.testService.updateTestStateStep(this.testId, this.testState));
-  }
-
-  this.resourceService.triggerRefresh();
-
-  if (navigate) this.handleNavigation(this.testState);
-}
 
 
   private handleNavigation(testState: any) {
@@ -340,6 +346,7 @@ async saveTest(navigate: boolean = false): Promise<void> {
   }
 
   ngOnDestroy() {
+    window.removeEventListener('beforeunload', this.beforeUnloadHandler.bind(this));
     if (this.routeParamSubscription) {
       this.routeParamSubscription.unsubscribe();
     }
@@ -350,9 +357,11 @@ async saveTest(navigate: boolean = false): Promise<void> {
   }
 
   onStepSelected(step: number) {
-    if (!this.testId || !stepRoutes[step]) return;
-    this.router.navigate(stepRoutes[step](this.testId));
+    const id = this.testId || this.sessionStorage.getTestId(); 
+    if (!id || !stepRoutes[step]) return;
+    this.router.navigate(stepRoutes[step](id));
   }
+
 
 }
 

@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { Test, Block, Scale } from '../../interfaces/test.interface';
+import { Test, Block, Scale, User } from '../../interfaces/test.interface';
 import { NgIf, SlicePipe } from '@angular/common';
 
 @Component({
@@ -10,8 +10,8 @@ import { NgIf, SlicePipe } from '@angular/common';
 })
 export class ListItemComponent {
 
-  @Input() item!: Test | Block | Scale;
-  @Input() type!: 'test' | 'block' | 'scale';
+  @Input() item!: Test | Block | Scale | User;
+  @Input() type!: 'test' | 'block' | 'scale' | 'patient';
   @Input() isEditing = false;
 
   get test(): Test | null {
@@ -26,8 +26,13 @@ export class ListItemComponent {
     return this.type === 'scale' ? this.item as Scale : null;
   }
 
-  @Output() edit = new EventEmitter<Test | Block | Scale>();
+  get patient(): User | null {
+    return this.type === 'patient' ? this.item as User : null;
+  }
+
+  @Output() edit = new EventEmitter<Test | Block | Scale | User>();
   @Output() delete = new EventEmitter<void>();
+  @Output() view = new EventEmitter<void>();
 
 
 }

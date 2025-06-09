@@ -1,0 +1,12 @@
+    <div class="max-w-md mx-auto mt-10 p-4 shadow rounded bg-white">
+      <h2 class="text-xl font-bold mb-4">Email Verification</h2>
+      <form [formGroup]="form" (ngSubmit)="submit()">
+        <label class="block mb-2">
+          <span>Email:</span>
+          <input type="email" formControlName="email" class="border p-2 w-full rounded" />
+        </label>
+        <button class="mt-4 px-4 py-2 bg-blue-500 text-white rounded" [disabled]="form.invalid">
+          Verify
+        </button>
+      </form>
+    </div>

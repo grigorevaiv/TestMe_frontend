@@ -37,8 +37,7 @@ export class TagChipsComponent {
   }
 
   removeTag(tag: string) {
-this.tags = this.tags.filter(t => t !== tag);
-this.tagsChange.emit(this.tags);
-
+  this.tags = this.tags.filter(t => t !== tag);
+  this.tagsChange.emit(this.tags);
   }
 }

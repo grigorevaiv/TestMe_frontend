@@ -1,4 +1,4 @@
-import { Component, effect, inject } from '@angular/core';
+import { Component, effect, ElementRef, inject, QueryList, ViewChildren } from '@angular/core';
 import { ResourceService } from '../../services/resource.service';
 //import { CacheService } from '../../services/cache.service';
 import { Block, Question } from '../../interfaces/test.interface';
@@ -10,16 +10,17 @@ import { ValidationService } from '../../services/validation.service';
 import { ViewChild } from '@angular/core';
 import { QuestionSelectorComponent } from "../../components/question-selector/question-selector.component";
 import { SentencecasePipe } from '../../pipes/sentencecase.pipe';
-import { NgClass } from '@angular/common';
+import { NgClass, NgIf } from '@angular/common';
 import { ToastService } from '../../services/toast.service';
 import { SessionStorageService } from '../../services/session-storage.service';
 import { ProgressBarComponent } from '../../components/progress-bar/progress-bar.component';
 import { stepRoutes } from '../../constants/step-routes';
 import { ConfirmDialogComponent } from '../../components/confirm-dialog/confirm-dialog.component';
+import { TestContextService } from '../../services/test-context.service';
 
 @Component({
   selector: 'app-test-questions',
-  imports: [ReactiveFormsModule, SentencecasePipe, QuestionSelectorComponent, NgClass, ProgressBarComponent, ConfirmDialogComponent],
+  imports: [ReactiveFormsModule, SentencecasePipe, QuestionSelectorComponent, NgClass, ProgressBarComponent, ConfirmDialogComponent, NgIf],
   templateUrl: './test-questions.component.html',
   styleUrl: './test-questions.component.css'
 })
@@ -28,12 +29,12 @@ export class TestQuestionsComponent {
   private fb = inject(FormBuilder);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
-  //private cacheService = inject(CacheService);
   private sessionStorage = inject(SessionStorageService);
   private resourceService = inject(ResourceService);
   private validationService = inject(ValidationService);
   testService = inject(TestService);
   toast = inject(ToastService);
+  private testContextService = inject(TestContextService);
 
   testId: number | null = null;
   testState: any;
@@ -49,46 +50,41 @@ export class TestQuestionsComponent {
   @ViewChild(QuestionSelectorComponent, { static: false })
   selectorComponent?: QuestionSelectorComponent;
 
-  constructor() {
-    const idParam = this.route.snapshot.paramMap.get('testId');
-    this.mode = this.route.snapshot.paramMap.get('mode') || 'new';
+  async ngOnInit(): Promise<void> {
+    this.testContextService.resetContext();
 
-    const id = idParam ? Number(idParam) : this.sessionStorage.getTestId();
-    if (id) {
-      this.testId = id;
-      this.sessionStorage.setTestId(id);
-    } else {
-      console.warn('❌ [constructor] testId not found in route or session');
+    const idParam = this.route.snapshot.paramMap.get('testId');
+    const mode = this.route.snapshot.paramMap.get('mode') || 'new';
+    const storedId = this.sessionStorage.getTestId();
+    const id = idParam ? Number(idParam) : storedId;
+
+    if (!id) {
+      console.warn('[TestQuestionsComponent] No test ID found');
+      return;
     }
 
-    effect(() => {
-      const test = this.resourceService.testResource.value();
-      if(test) {
-        this.testState = test?.state ?? null;
-      }
-      const blocks = this.resourceService.blocksResource.value();
-      const questions = this.resourceService.questionsResource.value();
+    this.testId = id;
+    this.mode = mode;
+    this.sessionStorage.setTestId(id);
 
-      console.log('📦 test:', test?.id);
-      console.log('📥 blocks:', blocks?.map(b => b.id));
-      console.log('❓ questions:', questions?.map(q => q.id));
+    await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode));
 
-      
-      this.blocks = blocks || [];
-
-      if (questions && questions.length > 0) {
-        this.questions = questions;
-        console.log('✅ Loaded questions:', this.questions);
-        console.log('testId used:', this.testId);
-      }
-
-      if (this.blocks.length > 0) {
-        this.initializeQuestionsForms(); // 🧠 вызывается строго после blocks
-      }
+    this.testContextService.getTest().subscribe(test => {
+      this.testState = test?.state ?? null;
     });
 
-    this.resourceService.triggerRefresh();
+    this.testContextService.getBlocks().subscribe(blocks => {
+      this.blocks = blocks || [];
+    });
+
+    this.testContextService.getQuestions().subscribe(questions => {
+      this.questions = questions || [];
+    });
+
+    this.initializeQuestionsForms();
+
   }
+
 
   addQuestionToBlock(block: Block) {
     const formArray = this.questionsOfBlock[block.id!];
@@ -125,8 +121,6 @@ removeQuestionFromBlock(blockId: number, index: number) {
   }
 }
 
-
-
 initializeQuestionsForms() {
   this.questionsOfBlock = {};
   const lastQuestionOfTest = this.questions[this.questions.length - 1];
@@ -158,7 +152,7 @@ initializeQuestionsForms() {
       isActive: [question?.isActive ?? true],
       hasImage: [!!question?.imageUrl],
       isUploadingImage: [false],
-      isCloned: [question?.id ? false : true], // если id нет, то клон
+      isCloned: [question?.id ? false : true],
       realId: [question?.realId ?? question?.id ?? null]
     });
 
@@ -222,16 +216,14 @@ async saveAllQuestions(newQuestions?: Question[]) {
 
   let payload: Question[] = [];
 
-  // 1. если есть новые вопросы
   if (newQuestions) {
     payload = newQuestions;
-
+    console.log('New questions to save:', payload);
     for (const block of this.blocks) {
       const relatedQuestions = newQuestions.filter(q => q.blockId === block.id);
       const currentFormArray = this.questionsOfBlock[block.id!];
 
       if (relatedQuestions.length > 0) {
-        // ориентируемся на количество форм
         block.numberOfQuestions = currentFormArray.length;
 
         try {
@@ -245,11 +237,10 @@ async saveAllQuestions(newQuestions?: Question[]) {
       }
     }
   } else {
-    // если новых вопросов нет, собираем существующие
+
     for (const [blockId, formArray] of Object.entries(this.questionsOfBlock)) {
       const block = this.blocks.find(b => b.id === +blockId)!;
 
-      // пересчитываем формы
       block.numberOfQuestions = formArray.length;
 
       for (const form of formArray.controls) {
@@ -263,7 +254,6 @@ async saveAllQuestions(newQuestions?: Question[]) {
       }
     }
 
-    // обновляем блоки
     for (const block of this.blocks) {
       try {
         const updatedBlock = await firstValueFrom(
@@ -288,95 +278,85 @@ async saveAllQuestions(newQuestions?: Question[]) {
   }
 }
 
-async updateQuestions() {
-  if (!this.testId) {
-    console.error('Missing testId');
-    return;
-  }
-
-  const payloadToUpdate: Question[] = [];
-  const payloadToCreate: Question[] = [];
-
-  // Сначала собираем обновления и новые вопросы
-  for (const [blockIdStr, formArray] of Object.entries(this.questionsOfBlock)) {
-    const blockId = +blockIdStr;
-    const block = this.blocks.find(b => b.id === blockId)!;
-
-    block.numberOfQuestions = formArray.length; // Пересчёт количества
-
-    for (const form of formArray.controls) {
-      const value = form.value;
-      const questionData: Question = {
-        text: value.text,
-        imageUrl: value.imageUrl || null,
-        isActive: value.isActive,
-        blockId: blockId,
-      };
-
-      if (value.id && !value.isCloned) {
-        questionData.id = value.id;
-        payloadToUpdate.push(questionData);
-      } else {
-        payloadToCreate.push(questionData);
-      }
-    }
-  }
-
-  try {
-    // Удаление вопросов
-    if (this.questionsToDelete?.length > 0) {
-      await firstValueFrom(this.testService.deleteQuestions(this.questionsToDelete));
-      console.log('Deleted questions:', this.questionsToDelete);
-      this.questionsToDelete = [];
+  async updateQuestions() {
+    if (!this.testId) {
+      console.error('Missing testId');
+      return;
     }
 
-    // Обновление блоков
-    for (const block of this.blocks) {
-      await firstValueFrom(this.testService.updateBlock(this.testId, block.id!, block));
-      console.log('Block updated:', block);
-    }
+    const payloadToUpdate: Question[] = [];
+    const payloadToCreate: Question[] = [];
 
-    // Обновление существующих вопросов
-    if (payloadToUpdate.length > 0) {
-      await firstValueFrom(this.testService.updateQuestions(this.testId, payloadToUpdate));
-      console.log('Questions updated successfully:', payloadToUpdate);
-    }
+    for (const [blockIdStr, formArray] of Object.entries(this.questionsOfBlock)) {
+      const blockId = +blockIdStr;
+      const block = this.blocks.find(b => b.id === blockId)!;
 
-    // Сохранение новых вопросов
-    if (payloadToCreate.length > 0) {
-      await firstValueFrom(this.testService.saveQuestionsBatch(this.testId, payloadToCreate));
-      console.log('New questions saved successfully:', payloadToCreate);
-    }
+      block.numberOfQuestions = formArray.length;
 
+      for (const form of formArray.controls) {
+        const value = form.value;
+        const questionData: Question = {
+          text: value.text,
+          imageUrl: value.imageUrl || null,
+          isActive: value.isActive,
+          blockId: blockId,
+        };
 
-    this.resourceService.triggerRefresh();
-  } catch (error) {
-    console.error('Error in updating questions or blocks:', error);
-  }
-}
-
-
-
-    ngOnDestroy() {
-      window.removeEventListener('beforeunload', this.beforeUnloadHandler);
-    }
-
-    beforeUnloadHandler = (event: BeforeUnloadEvent) => {
-      if (this.hasUnsavedChanges()) {
-        event.preventDefault();
-        event.returnValue = '';
-      }
-    }
-      hasUnsavedChanges(): boolean {
-      for (const formArray of Object.values(this.questionsOfBlock)) {
-        for (const form of formArray.controls) {
-          if (form.dirty) {
-            return true;
-          }
+        if (value.id && !value.isCloned) {
+          console.log('Updating question', value.id, 'with imageUrl:', questionData.imageUrl);
+          questionData.id = value.id;
+          payloadToUpdate.push(questionData);
+        } else {
+          payloadToCreate.push(questionData);
         }
       }
-      return false;
     }
+
+    try {
+      if (this.questionsToDelete?.length > 0) {
+        await firstValueFrom(this.testService.deleteQuestions(this.questionsToDelete));
+        console.log('Deleted questions:', this.questionsToDelete);
+        this.questionsToDelete = [];
+      }
+      for (const block of this.blocks) {
+        await firstValueFrom(this.testService.updateBlock(this.testId, block.id!, block));
+        console.log('Block updated:', block);
+      }
+      if (payloadToUpdate.length > 0) {
+        await firstValueFrom(this.testService.updateQuestions(this.testId, payloadToUpdate));
+        console.log('Questions updated successfully:', payloadToUpdate);
+      }
+      if (payloadToCreate.length > 0) {
+        await firstValueFrom(this.testService.saveQuestionsBatch(this.testId, payloadToCreate));
+        console.log('New questions saved successfully:', payloadToCreate);
+      }
+      this.resourceService.triggerRefresh();
+    } catch (error) {
+      console.error('Error in updating questions or blocks:', error);
+    }
+  }
+
+  ngOnDestroy() {
+    window.removeEventListener('beforeunload', this.beforeUnloadHandler);
+  }
+
+  beforeUnloadHandler = (event: BeforeUnloadEvent) => {
+    if (this.hasUnsavedChanges()) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  }
+
+  hasUnsavedChanges(): boolean {
+    for (const formArray of Object.values(this.questionsOfBlock)) {
+      for (const form of formArray.controls) {
+        if (form.dirty) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
 
 
     async deleteImage(blockId: number, questionIndex: number) {
@@ -386,11 +366,10 @@ async updateQuestions() {
       const imageUrl = questionForm.get('imageUrl')?.value;
       const questionId = questionForm.get('id')?.value;
 
-      if (!imageUrl) return; // только если вообще нет картинки — выходим
+      if (!imageUrl) return;
 
       const isTemp = imageUrl.includes('tmp/');
 
-      // удаляем с сервера только если не временная и id есть
       if (!isTemp && questionId) {
         this.testService.deleteImage(imageUrl, questionId).subscribe(
           (res) => console.log('Deleted from server & DB:', res),
@@ -398,20 +377,18 @@ async updateQuestions() {
         );
       }
 
-      // очищаем значения
       questionForm.patchValue({
         imageUrl: '',
         hasImage: false,
         isUploadingImage: false,
       });
 
-      // обновляем превью
       if (this.imagePreviews[blockId]?.[questionIndex]) {
         const updated = { ...this.imagePreviews[blockId] };
         delete updated[questionIndex];
         this.imagePreviews[blockId] = { ...updated };
       }
-
+      this.onToggleHasImage(blockId, questionIndex);
       console.log('Image removed from form and previews.');
     }
 
@@ -426,75 +403,69 @@ async updateQuestions() {
   }
 
   onToggleHasImage(blockId: number, questionIndex: number) {
-  const form = this.getQuestionsFormsForBlock(blockId).at(questionIndex);
-  const hasImage = form.get('hasImage')?.value;
-  const imageUrlControl = form.get('imageUrl');
+    const form = this.getQuestionsFormsForBlock(blockId).at(questionIndex);
+    const hasImage = form.get('hasImage')?.value;
+    const imageUrlControl = form.get('imageUrl');
 
-  if (!hasImage) {
-    form.patchValue({
-      imageUrl: '',
-      isUploadingImage: false,
-    });
+    if (!hasImage) {
+      form.patchValue({
+        imageUrl: '',
+        isUploadingImage: false,
+      });
 
-    if (this.imagePreviews[blockId]?.[questionIndex]) {
-      delete this.imagePreviews[blockId][questionIndex];
+      if (this.imagePreviews[blockId]?.[questionIndex]) {
+        delete this.imagePreviews[blockId][questionIndex];
+      }
+    }
+    if (hasImage) {
+      imageUrlControl?.setValidators([Validators.required]);
+      imageUrlControl?.markAsTouched();
+    } else {
+      imageUrlControl?.clearValidators();
+      imageUrlControl?.setValue('');
+    }
+
+    imageUrlControl?.updateValueAndValidity();
+    
+  }
+
+  async saveTest(navigate: boolean = false): Promise<void> {
+    if (!this.testState) return;
+
+    if (this.hasInvalidQuestions()) {
+      this.toast.show({
+        message: 'Please fill in all required fields for questions',
+        type: 'warning',
+      });
+      this.markAllQuestionsAsTouched();
+      return;
+    }
+
+    if (!this.questions || this.questions.length === 0) {
+      this.markAllQuestionsAsTouched();
+      await this.saveAllQuestions();
+      console.log('New questions saved successfully');
+      this.toast.show({message: 'Questions saved successfully', type: 'success'});
+    } else {
+      this.updateQuestions();
+      this.toast.show({message: 'Questions updated successfully', type: 'success'});
+    }
+
+    let targetState = this.testState;
+    if (this.testState.currentStep < 4) {
+      this.testState.currentStep = 4;
+      targetState = await firstValueFrom(
+        this.testService.updateTestStateStep(this.testId!, this.testState)
+      );
+      console.log('Test state updated to step 4:', targetState);
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit'));
+      this.router.navigate(['/test-questions/edit', this.testId]);
+    }
+
+    if (navigate) {
+      this.handleNavigation(targetState);
     }
   }
-  if (hasImage) {
-    console.log('Setting validators for imageUrl');
-    imageUrlControl?.setValidators([Validators.required]);
-    imageUrlControl?.markAsTouched();
-  } else {
-    imageUrlControl?.clearValidators();
-    imageUrlControl?.setValue('');
-  }
-  imageUrlControl?.updateValueAndValidity();
-  
-}
-
-async saveTest(navigate: boolean = false): Promise<void> {
-  if (!this.testState) return;
-
-  // 🛑 Проверка на невалидные вопросы
-  if (this.hasInvalidQuestions()) {
-    this.toast.show({
-      message: 'Please fill in all required fields for questions',
-      type: 'warning',
-    });
-    this.markAllQuestionsAsTouched(); // Чтобы подсветились ошибки
-    return;
-  }
-
-  // ✅ Сохраняем вопросы
-  if (!this.questions || this.questions.length === 0) {
-    this.markAllQuestionsAsTouched();
-    await this.saveAllQuestions();
-    console.log('New questions saved successfully');
-    this.toast.show({message: 'Questions saved successfully', type: 'success'});
-  } else {
-    this.updateQuestions();
-    this.toast.show({message: 'Questions updated successfully', type: 'success'});
-  }
-
-  // 2. Обновляем шаг, если нужно
-  let targetState = this.testState;
-  if (this.testState.currentStep < 4) {
-    this.testState.currentStep = 4;
-    targetState = await firstValueFrom(
-      this.testService.updateTestStateStep(this.testId!, this.testState)
-    );
-    console.log('Test state updated to step 4:', targetState);
-  }
-
-  // 3. Триггерим обновление ресурсов
-  this.resourceService.triggerRefresh();
-
-  // 4. Навигация (если передано navigate = true)
-  if (navigate) {
-    this.handleNavigation(targetState);
-  }
-}
-
 
   private handleNavigation(testState: any) {
     const step = testState.currentStep;
@@ -526,13 +497,13 @@ async saveTest(navigate: boolean = false): Promise<void> {
     return false;
   }
 
-getError(field: string, blockId: number, questionIndex: number): string | null {
-  const formArray = this.getQuestionsFormsForBlock(blockId);
-  if (!formArray || questionIndex >= formArray.length) return null;
+  getError(field: string, blockId: number, questionIndex: number): string | null {
+    const formArray = this.getQuestionsFormsForBlock(blockId);
+    if (!formArray || questionIndex >= formArray.length) return null;
 
-  const control = formArray.at(questionIndex)?.get(field);
-  return control && control.touched ? this.validationService.getErrorMessage(control, field) : null;
-}
+    const control = formArray.at(questionIndex)?.get(field);
+    return control && control.touched ? this.validationService.getErrorMessage(control, field) : null;
+  }
 
 
   markAllQuestionsAsTouched() {
@@ -541,17 +512,33 @@ getError(field: string, blockId: number, questionIndex: number): string | null {
         form.markAllAsTouched();
       }
     }
+
+    setTimeout(() => {
+      for (const ref of this.questionRefs.toArray()) {
+        const el = ref.nativeElement as HTMLElement;
+
+        if (el.querySelector('.ng-invalid')) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('ring-2', 'ring-red-400');
+
+          setTimeout(() => {
+            el.classList.remove('ring-2', 'ring-red-400');
+          }, 2000);
+
+          break;
+        }
+      }
+    }, 0);
   }
 
-    handleQuestionSelection(question: Question) {
-  // 1. Перебираем все блоки по порядку
+
+  handleQuestionSelection(question: Question) {
   for (let i = 0; i < this.blocks.length; i++) {
     const block = this.blocks[i];
     const formArray = this.questionsOfBlock[block.id!];
 
     if (!formArray || formArray.length === 0) continue;
 
-    // 2. Ищем первую пустую форму
     const emptyForm = formArray.controls.find(ctrl =>
       !ctrl.get('text')?.value?.trim()
     );
@@ -563,19 +550,14 @@ getError(field: string, blockId: number, questionIndex: number): string | null {
         imageUrl: question.imageUrl || '',
         hasImage: !!question.imageUrl,
       });
-
-
-
       return;
     }
   }
-
-  // 3. Если ни в одном блоке не нашлось места
-  console.warn('Все блоки заполнены. Вставка невозможна.');
+  console.warn('All blocks are full, cannot add question:', question.text);
 }
 
 onDragOver(event: DragEvent) {
-  event.preventDefault(); // нужно для drop
+  event.preventDefault(); 
 }
 
 onDrop(event: DragEvent, blockId: number, formIndex: number) {
@@ -591,7 +573,7 @@ onDrop(event: DragEvent, blockId: number, formIndex: number) {
   const form = formArray?.at(formIndex);
 
   if (!form) {
-    console.warn(`Форма с индексом ${formIndex} не найдена в блоке ${blockId}`);
+    console.warn(`Form with index ${formIndex} is not found ${blockId}`);
     return;
   }
 
@@ -601,37 +583,33 @@ onDrop(event: DragEvent, blockId: number, formIndex: number) {
   const existingId = form.get('id')?.value;
   const existingRealId = form.get('realId')?.value;
 
-
-  // 🌀 Вернуть старый вопрос, если он был
   if (existingText || existingImage) {
-const existingQuestion: Question = {
-  id: existingId,
-  realId: existingRealId,
-  text: existingText,
-  imageUrl: existingImage || '',
-  isActive: true,
-  hasImage: !!existingImage || existingHasImage,
-  blockId: 0,
-};
-    this.selectorComponent?.restoreQuestion(existingQuestion);
-  }
-
-  // 🆕 Генерим временный id
-  const tempId = `temp-${Date.now()}-${Math.random()}`;
-
-  form.patchValue({
-    id: tempId,
-    realId: droppedQuestion.id, // сохраняем оригинальный id
-    text: droppedQuestion.text,
-    imageUrl: droppedQuestion.imageUrl || '',
+  const existingQuestion: Question = {
+    id: existingId,
+    realId: existingRealId,
+    text: existingText,
+    imageUrl: existingImage || '',
     isActive: true,
-    hasImage: !!droppedQuestion.imageUrl,
-    isCloned: true
-  });
+    hasImage: !!existingImage || existingHasImage,
+    blockId: 0,
+  };
+      this.selectorComponent?.restoreQuestion(existingQuestion);
+    }
 
-  this.selectorComponent?.removeQuestion?.(droppedQuestion.id!);
-}
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
 
+    form.patchValue({
+      id: tempId,
+      realId: droppedQuestion.id,
+      text: droppedQuestion.text,
+      imageUrl: droppedQuestion.imageUrl || '',
+      isActive: true,
+      hasImage: !!droppedQuestion.imageUrl,
+      isCloned: true
+    });
+
+    this.selectorComponent?.removeQuestion?.(droppedQuestion.id!);
+  }
 
 showSelector = false;
 
@@ -644,20 +622,18 @@ onQuestionEdit(blockId: number, index: number) {
   if (!form) return;
 
   const realId = form.get('realId')?.value;
-  if (!realId) return; // Это уже новый вопрос, не из базы
+  if (!realId) return;
 
   const editedQuestion: Question = {
-    id: undefined, // уже отредактированный — новый
+    id: undefined,
     text: form.get('text')?.value,
     imageUrl: form.get('imageUrl')?.value || '',
     isActive: form.get('isActive')?.value,
     blockId: 0,
-    realId: realId // оригинальный айди, чтобы вернуть в список
+    realId: realId
   };
 
   this.selectorComponent?.restoreQuestion(editedQuestion);
-
-  // И чистим realId, чтобы больше не возвращался
   form.patchValue({ realId: null });
 }
 
@@ -665,14 +641,16 @@ onQuestionEdit(blockId: number, index: number) {
     if (!this.testState || !this.testState.currentStep) {
       return [];
     }
-    console.log(Array.from({ length: this.testState.currentStep }, (_, i) => i + 1));
+
     return Array.from({ length: this.testState.currentStep }, (_, i) => i + 1);
   }
 
-    onStepSelected(step: number) {
-      if (!this.testId || !stepRoutes[step]) return;
-      this.router.navigate(stepRoutes[step](this.testId));
-    }
+  onStepSelected(step: number) {
+    const id = this.testId || this.sessionStorage.getTestId(); 
+    if (!id || !stepRoutes[step]) return;
+    this.router.navigate(stepRoutes[step](id));
+  }
+
 
   confirmDialogVisible = false;
   confirmDialogMessage = 'Are you sure you want to delete this question?';
@@ -704,6 +682,8 @@ onQuestionEdit(blockId: number, index: number) {
     this.pendingDeleteBlockId = null;
     this.pendingDeleteQuestionIndex = null;
   }
+
+  @ViewChildren('questionRef') questionRefs!: QueryList<ElementRef>;
 
 
 }

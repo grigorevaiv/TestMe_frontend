@@ -14,11 +14,13 @@ import { ProgressBarComponent } from '../../components/progress-bar/progress-bar
 import { ListItemComponent } from '../../components/list-item/list-item.component';
 import { ConfirmDialogComponent } from '../../components/confirm-dialog/confirm-dialog.component';
 import { SessionStorageService } from '../../services/session-storage.service';
+import { TestContextService } from '../../services/test-context.service';
+import { NgIf } from '@angular/common';
 
 
 @Component({
   selector: 'app-test-scales',
-  imports: [ReactiveFormsModule, SentencecasePipe, ProgressBarComponent, ListItemComponent, ConfirmDialogComponent],
+  imports: [ReactiveFormsModule, SentencecasePipe, ProgressBarComponent, ListItemComponent, ConfirmDialogComponent, NgIf],
   templateUrl: './test-scales.component.html',
   styleUrl: './test-scales.component.css'
 })
@@ -32,6 +34,7 @@ export class TestScalesComponent {
   private validationService = inject(ValidationService);
   resourceService = inject(ResourceService);
   toast = inject(ToastService);
+  private testContextService = inject(TestContextService);
 
   testId: number | null = null;
   mode: string = '';
@@ -52,52 +55,67 @@ export class TestScalesComponent {
     blockId: [null as number | null, [Validators.required]],
   });
 
-  constructor() {
-    // 1. Получаем параметры из snapshot сразу в конструкторе
+  async ngOnInit(): Promise<void> {
+    this.testContextService.resetContext();
+
     const idParam = this.route.snapshot.paramMap.get('testId');
-    this.mode = this.route.snapshot.paramMap.get('mode') || 'new';
+    const mode = this.route.snapshot.paramMap.get('mode') || 'new';
+    const storedId = this.sessionStorage.getTestId();
+    const id = idParam ? Number(idParam) : storedId;
 
-    const id = idParam ? Number(idParam) : this.sessionStorage.getTestId();
-
-    if (id) {
-      this.testId = id;
-      this.sessionStorage.setTestId(id);
-    } else {
-      console.warn('[constructor] ❌ testId not found in route or session');
+    if (!id) {
+      console.warn('[TestScalesComponent] No test ID found');
+      return;
     }
 
-    effect(() => {
-      const test = this.resourceService.testResource.value();
-      const blocks = this.resourceService.blocksResource.value();
-      const scales = this.resourceService.scalesResource.value();
+    this.testId = id;
+    this.mode = mode;
+    this.sessionStorage.setTestId(id);
 
-      this.testState = test?.state ?? null;
-      this.blocks = blocks || [];
-      this.scales = scales || [];
+    await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode));
 
-
-      if (this.blocks.length && !this.newScaleForm.get('blockId')?.value) {
-        this.newScaleForm.patchValue({
-          blockId: this.blocks[0].id || null,
-        });
+    this.testContextService.getTest().subscribe(test => {
+      if (test) {
+        this.testState = test.state ?? null;
       }
     });
 
-    this.resourceService.triggerRefresh();
+    this.testContextService.getBlocks().subscribe(blocks => {
+      this.blocks = blocks || [];
+      this.newScaleForm.patchValue({
+        blockId: this.blocks[0].id || null,
+      });
+    });
+
+    this.testContextService.getScales().subscribe(scales => {
+      this.scales = scales || [];
+    });
+
+    this.addValidatorsToForm();
+    window.addEventListener('beforeunload', this.beforeUnloadHandler);
+
   }
 
-  ngOnInit(): void {
-    this.addValidatorsToForm();
+  ngOnDestroy(): void {
+    window.removeEventListener('beforeunload', this.beforeUnloadHandler);
   }
+  
+  private beforeUnloadHandler = (event: BeforeUnloadEvent) => {
+    if (this.isEditing || this.pendingScales.length > 0) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  };
 
   get completedStepsArray(): number[] {
     const currentStep = this.testState?.currentStep ?? 0;
     return Array.from({ length: currentStep }, (_, i) => i + 1);
   }
+
   private addValidatorsToForm() {
     this.newScaleForm.get('scaleType')?.valueChanges.subscribe((type) => {
       const pole2Control = this.newScaleForm.get('pole2');
-      if (type === '2') {
+      if (type === 'bipolar') {
         pole2Control?.setValidators([Validators.required, Validators.minLength(5)]);
       } else {
         pole2Control?.clearValidators();
@@ -123,7 +141,7 @@ export class TestScalesComponent {
       ...newScale,
       testId: this.testId!,
     });
-    this.toast.show({ message: 'Scale added to test', type: 'info' });
+    this.toast.show({ message: 'Scale added to list', type: 'info' });
 
     this.resetToDefault();
   }
@@ -187,7 +205,7 @@ export class TestScalesComponent {
     } else {
       await firstValueFrom(this.testService.updateScale(updated.id!, updated));
       this.toast.show({ message: 'Scale updated successfully!', type: 'success' });
-      this.resourceService.triggerRefresh();
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit'));
     }
 
     this.cancelEdit();
@@ -246,11 +264,15 @@ export class TestScalesComponent {
       await firstValueFrom(this.testService.addScalesBatch(this.testId, this.pendingScales));
       this.toast.show({ message: 'All scales saved!', type: 'success' });
       this.pendingScales = [];
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit'));
     }
 
     if (this.testState.currentStep < 3) {
       this.testState.currentStep = 3;
       await firstValueFrom(this.testService.updateTestStateStep(this.testId, this.testState));
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit'));
+      this.router.navigate(['/test-scales/edit', this.testId]);
+      return;
     }
 
     this.resourceService.triggerRefresh();
@@ -279,8 +301,9 @@ export class TestScalesComponent {
   }
 
   onStepSelected(step: number) {
-    if (!this.testId || !stepRoutes[step]) return;
-    this.router.navigate(stepRoutes[step](this.testId));
+    const id = this.testId || this.sessionStorage.getTestId(); 
+    if (!id || !stepRoutes[step]) return;
+    this.router.navigate(stepRoutes[step](id));
   }
 
 

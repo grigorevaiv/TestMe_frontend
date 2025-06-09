@@ -23,7 +23,11 @@
         [routerLinkActiveOptions]="{ exact: true }"
         routerLinkActive="border-b-2 text-sky-700"
         >Tests</a>
-        <a class="text-base sm:text-lg md:text-xl text-gray-700 hover:text-sky-700 transition font-interactive">Patients</a>
+        <a class="text-base sm:text-lg md:text-xl text-gray-700 hover:text-sky-700 transition font-interactive"
+        [routerLink]="'/patients'"
+        [routerLinkActiveOptions]="{ exact: true }"
+        routerLinkActive="border-b-2 text-sky-700"
+        >Patients</a>
 
         <!-- Выпадающее меню -->
         <div class="relative">

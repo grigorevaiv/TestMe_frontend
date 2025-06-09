@@ -12,10 +12,12 @@ import { ToastService } from '../../services/toast.service';
 import { SessionStorageService } from '../../services/session-storage.service';
 import { ProgressBarComponent } from '../../components/progress-bar/progress-bar.component';
 import { stepRoutes } from '../../constants/step-routes';
+import { TestContextService } from '../../services/test-context.service';
+import { NgIf } from '@angular/common';
 
 @Component({
   selector: 'app-test-answers',
-  imports: [ReactiveFormsModule, SentencecasePipe, ProgressBarComponent],
+  imports: [ReactiveFormsModule, SentencecasePipe, ProgressBarComponent, NgIf],
   templateUrl: './test-answers.component.html',
   styleUrl: './test-answers.component.css'
 })
@@ -27,6 +29,7 @@ export class TestAnswersComponent {
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private validationService = inject(ValidationService);
+  private testContextService = inject(TestContextService);
   resourceService = inject(ResourceService);
   toast = inject(ToastService);
 
@@ -36,45 +39,49 @@ export class TestAnswersComponent {
   mode : string = '';
   testState: any;
   step = 5;
-answersPerQuestion: { [blockId: number]: { [questionId: number]: FormArray<FormGroup> } } = {};
-
+  answersPerQuestion: { [blockId: number]: { [questionId: number]: FormArray<FormGroup> } } = {};
   testId: number | null = null;
+  
 
 
-  constructor() {
-    this.initializeRouteParams();
-    console.log(this.testId, 'Test ID from cache or route');
-    effect(() => {
-      this.blocks = this.resourceService.blocksResource.value() || [];
-      this.testState = this.resourceService.testResource.value()?.state ?? null;
-      const incomingQuestions = this.resourceService.questionsResource.value();
-      if (incomingQuestions && incomingQuestions?.length > 0) {
-        this.questions = incomingQuestions;
-        console.log('Loaded questions:', this.questions);
-        this.initializeAnswersForms();
-      }
-      const incomingAnswers = this.resourceService.answersResource.value();
-      if (incomingAnswers && incomingAnswers?.length > 0) {
-        console.log('Loaded answers:', incomingAnswers);
-        this.answers = incomingAnswers;
-        this.patchAnswersToForm(incomingAnswers);
-      }
-    });
+async ngOnInit(): Promise<void> {
+  this.testContextService.resetContext();
+
+  const idParam = this.route.snapshot.paramMap.get('testId');
+  const mode = this.route.snapshot.paramMap.get('mode') || 'new';
+  const storedId = this.sessionStorage.getTestId();
+  const id = idParam ? Number(idParam) : storedId;
+
+  if (!id) {
+    console.warn('[TestAnswersComponent] No test ID found');
+    return;
   }
 
-  private initializeRouteParams() {
-    this.route.paramMap.subscribe(async (params) => {
-      this.mode = params.get('mode') || 'new';
-      const id = params.get('testId');
-      if (id) {
-        this.testId = Number(id);
-        this.sessionStorage.setTestId(this.testId);
-      } else {
-        this.testId = this.sessionStorage.getTestId();
-      }
-      console.log('Test ID (answers:)', this.testId); 
-    });
-  }
+  this.testId = id;
+  this.mode = mode;
+
+  await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode));
+
+  this.testContextService.getTest().subscribe(test => {
+    if (test) {
+      this.testState = test.state ?? null;
+    }
+  });
+
+  this.testContextService.getBlocks().subscribe(blocks => {
+    this.blocks = blocks || [];
+  });
+
+  this.testContextService.getQuestions().subscribe(questions => {
+    this.questions = questions || [];
+    this.initializeAnswersForms();
+  });
+
+  this.testContextService.getAnswers().subscribe(answers => {
+    this.answers = answers || [];
+    this.patchAnswersToForm(this.answers);
+  });
+}
 
 initializeAnswersForms() {
   this.answersPerQuestion = {};
@@ -182,16 +189,19 @@ async saveTest(navigate: boolean = false): Promise<void> {
         const index = this.questions.findIndex(
           q => q.id === questionId && q.blockId === +blockIdStr
         );
-        console.log('📦 Total answerForms:', this.answerForms.length);
 
-this.answerForms.forEach((el, i) => {
-  console.log(`🔢 answerForm[${i}]:`, el.nativeElement);
-});
         setTimeout(() => {
           const target = this.answerForms.get(index);
-          console.log('🎯 Trying to scroll to index:', index);
+          const el = target?.nativeElement as HTMLElement;
 
-          target?.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.classList.add('ring-2', 'ring-red-400');
+
+            setTimeout(() => {
+              el.classList.remove('ring-2', 'ring-red-400');
+            }, 2000);
+          }
         }, 0);
 
         this.toast?.show?.({
@@ -211,7 +221,7 @@ this.answerForms.forEach((el, i) => {
           result.push({
             text,
             questionId,
-            ...(id && { id })  // если id есть — добавляем
+            ...(id && { id })
           });
         }
       });
@@ -226,49 +236,46 @@ this.answerForms.forEach((el, i) => {
     return;
   }
 
-try {
-  const newAnswers = result.filter(a => !a.id);
-  const existingAnswers = result.filter(a => !!a.id);
+  try {
+    const newAnswers = result.filter(a => !a.id);
+    const existingAnswers = result.filter(a => !!a.id);
 
-  if (newAnswers.length > 0) {
-    const savedAnswers = await firstValueFrom(
-      this.testService.saveAnswersBatch(newAnswers)
-    );
-    console.log('✅ Saved new answers:', savedAnswers);
+    if (newAnswers.length > 0) {
+      const savedAnswers = await firstValueFrom(
+        this.testService.saveAnswersBatch(newAnswers)
+      );
+      console.log('Saved new answers:', savedAnswers);
+    }
+
+    if (existingAnswers.length > 0) {
+      const updatedAnswers = await firstValueFrom(
+        this.testService.updateAnswersBatch(existingAnswers)
+      );
+      console.log('Updated existing answers:', updatedAnswers);
+    }
+
+    this.toast?.show?.({ message: 'Answers saved successfully!', type: 'success' });
+  } catch (error) {
+    console.error('Failed to save/update answers:', error);
+    this.toast?.show?.({ message: 'Failed to save/update answers', type: 'error' });
+    return;
   }
 
-  if (existingAnswers.length > 0) {
-    const updatedAnswers = await firstValueFrom(
-      this.testService.updateAnswersBatch(existingAnswers)
-    );
-    console.log('✅ Updated existing answers:', updatedAnswers);
+
+    if (this.testState?.currentStep < 5 && this.testId) {
+      this.testState.currentStep = 5;
+      const updatedState = await firstValueFrom(
+        this.testService.updateTestStateStep(this.testId, this.testState)
+      );
+      this.testState = updatedState;
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit'));
+      this.router.navigate(['/test-answers/edit', this.testId]);
+    }
+
+    if (navigate) {
+      this.handleNavigation();
+    }
   }
-
-  this.toast?.show?.({ message: 'Answers saved successfully!', type: 'success' });
-  this.resourceService.triggerRefresh();
-
-} catch (error) {
-  console.error('❌ Failed to save/update answers:', error);
-  this.toast?.show?.({ message: 'Failed to save/update answers', type: 'error' });
-  return;
-}
-
-
-  if (this.testState?.currentStep < 5 && this.testId) {
-    this.testState.currentStep = 5;
-    const updatedState = await firstValueFrom(
-      this.testService.updateTestStateStep(this.testId, this.testState)
-    );
-    this.testState = updatedState;
-    console.log('📦 Updated testState to step 5:', updatedState);
-  }
-
-  if (navigate) {
-    this.handleNavigation();
-  }
-}
-
-
 
 
   handleNavigation() {
@@ -297,8 +304,10 @@ try {
     }
   
     onStepSelected(step: number) {
-      if (!this.testId || !stepRoutes[step]) return;
-      this.router.navigate(stepRoutes[step](this.testId));
+      const id = this.testId || this.sessionStorage.getTestId(); 
+      if (!id || !stepRoutes[step]) return;
+      this.router.navigate(stepRoutes[step](id));
     }
+
 
 }

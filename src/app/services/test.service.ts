@@ -8,7 +8,7 @@ import { Test, Block, Scale, Question, Answer, Weight, State, Norm, Tag, Questio
 export class TestService {
   constructor() {}
 
-  baseUrl = environment.BASE_URL;
+  baseUrl = environment.TESTS_BASE_URL;
   http = inject(HttpClient);
 
   // Тесты
@@ -182,4 +182,26 @@ export class TestService {
   getAllTags(): Observable<Tag[]> {
     return this.http.get<Tag[]>(`${this.baseUrl}/tags/all`);
   }
+
+  getTestResults(testId: number, userId: number): Observable<any> {
+    return this.http.get<any>(`${this.baseUrl}/${testId}/calculate`);
+  }
+
+  saveTestResults(testId: number, payload: any) {
+    return this.http.post(`${this.baseUrl}/${testId}/save`, payload);
+  }
+
+  getLatestUserResult(userId: number, testId: number): Observable<any> {
+    return this.http.get<any>(`${this.baseUrl}/results/latest`, {
+      params: {
+        user_id: userId,
+        test_id: testId
+      }
+    });
+  }
+
+  getAllResultsByUser(userId: number): Observable<any> {
+    return this.http.get<any>(`${this.baseUrl}/results/${userId}`);
+  }
+
 }

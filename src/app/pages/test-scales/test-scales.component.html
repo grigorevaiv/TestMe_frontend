@@ -1,10 +1,11 @@
 <div class="min-h-screen bg-white pt-6 p-4 sm:px-6 lg:px-8">
   <app-progress-bar
+    *ngIf="testState"
     [step]="step"
     [totalSteps]="8"
     [completedSteps]="completedStepsArray"
     (stepClicked)="onStepSelected($event)"
-    [maxAllowedStep]="(testState?.currentStep ?? step) + 1"
+    [maxAllowedStep]="testState.currentStep"
   ></app-progress-bar>
 
   <div class="max-w-7xl mx-auto">
@@ -30,7 +31,7 @@
           <!-- Название полюса (-) -->
           <div>
             <label class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1">
-              Scale name @if(newScaleForm.get('scaleType')?.value === '2'){(-)} <span class="text-red-500">*</span>
+              Scale name @if(newScaleForm.get('scaleType')?.value === 'bipolar'){(-)} <span class="text-red-500">*</span>
             </label>
             <input type="text" formControlName="pole1"
               class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
@@ -41,7 +42,7 @@
           </div>
 
           <!-- Название полюса (+) -->
-          @if(newScaleForm.get('scaleType')?.value === '2') {
+          @if(newScaleForm.get('scaleType')?.value === 'bipolar') {
             <div>
               <label class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1">
                 Scale name (+) <span class="text-red-500">*</span>
@@ -94,7 +95,7 @@
                 <button
                   class="bg-sky-700 hover:bg-sky-800 text-white font-medium px-6 py-2 rounded disabled:bg-sky-400"
                   [disabled]="!resourceService.blocksResource.value()?.length"
-                  (click)="saveTest(true)">Next →</button>
+                  (click)="saveTest(true)">Save and proceed →</button>
               </div>
             </div>
             @if(resourceService.blocksResource.value()?.length === 0) {
@@ -104,34 +105,44 @@
         </form>
       </div>
 
-      <!-- Правая колонка -->
-      <div class="w-full lg:w-1/2 border-l border-gray-200 pl-4">
-        <h2 class="text-xl sm:text-2xl font-semibold text-gray-800 mb-6">Current scales</h2>
+<!-- Правая колонка: список шкал -->
+<div class="w-full lg:w-1/2 border-l border-gray-200 pl-4">
+  <h2 class="text-xl sm:text-2xl font-semibold text-gray-800 mb-6">Scales list</h2>
 
-        @if(allScales.length === 0) {
-          <p class="text-gray-500 sm:text-lg md:text-xl font-medium">
-            No scales defined yet, please add them to the test
-          </p>
-        } @else {
-          <div class="flex flex-col gap-4">
-            @for(scale of allScales; track scale.id ?? scale.pole1) {
-              <app-list-item
-                [item]="scale" type="scale"
-                (edit)="onEditScale(scale)"
-                (delete)="confirmDelete(scale)"
-                [isEditing]="isEditing"
-              ></app-list-item>
+  @if(allScales.length === 0) {
+    <p class="text-gray-500 sm:text-lg md:text-xl font-medium">
+      No scales defined yet, please add them to the test
+    </p>
+  } @else {
+    <div class="flex flex-col gap-4">
+      @for(scale of allScales; track scale.id ?? scale.pole1; let i = $index) {
 
-              <app-confirm-dialog
-                [visible]="showDeleteDialog"
-                [message]="'Are you sure you want to delete this scale?'"
-                (confirm)="handleDeleteConfirmed()"
-                (cancel)="handleDeleteCancelled()">
-              </app-confirm-dialog>
-            }
-          </div>
+        @if(!scale.id && (i === 0 || allScales[i - 1]?.id)) {
+          <hr class="my-2 border-t border-gray-300" />
+          <h2 class="text-gray-700 text-base font-semibold uppercase tracking-wide">Unsaved scales</h2>
+          <p class="text-red-500 text-sm">Note: These scales are not saved yet and will be lost if you leave the page without saving</p>
         }
-      </div>
+
+        <app-list-item
+          [item]="scale"
+          type="scale"
+          (edit)="onEditScale(scale)"
+          (delete)="confirmDelete(scale)"
+          [isEditing]="isEditing"
+        ></app-list-item>
+
+        <app-confirm-dialog
+          [visible]="showDeleteDialog"
+          [message]="'Are you sure you want to delete this scale?'"
+          (confirm)="handleDeleteConfirmed()"
+          (cancel)="handleDeleteCancelled()">
+        </app-confirm-dialog>
+      }
+    </div>
+  }
+</div>
+
+
     </div>
   </div>
 </div>
