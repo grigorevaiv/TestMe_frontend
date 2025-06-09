@@ -10,6 +10,9 @@ COPY . .
 ARG TESTS_BASE_URL
 ARG PATIENTS_BASE_URL
 
+ENV TESTS_BASE_URL=${TESTS_BASE_URL}
+ENV PATIENTS_BASE_URL=${PATIENTS_BASE_URL}
+
 RUN mkdir -p src/environments && \
     echo "export const environment = {" \
     "  TESTS_BASE_URL: ''," \
