@@ -7,16 +7,21 @@ RUN npm install
 
 COPY . .
 
+ARG TESTS_BASE_URL
+ARG PATIENTS_BASE_URL
+
+RUN mkdir -p src/environments && \
+    echo "export const environment = {" > src/environments/environment.prod.ts && \
+    echo "  TESTS_BASE_URL: '${TESTS_BASE_URL}'," >> src/environments/environment.prod.ts && \
+    echo "  PATIENTS_BASE_URL: '${PATIENTS_BASE_URL}'" >> src/environments/environment.prod.ts && \
+    echo "};" >> src/environments/environment.prod.ts
+
 RUN npx ng build --configuration=production
 
 FROM nginx:stable-alpine
 
-RUN rm /etc/nginx/conf.d/default.conf
-
 COPY --from=build /app/dist/frontend/browser /usr/share/nginx/html
-
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
-
 CMD ["nginx", "-g", "daemon off;"]
