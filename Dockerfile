@@ -7,6 +7,9 @@ RUN npm install
 
 COPY . .
 
+ARG TESTS_BASE_URL
+ARG PATIENTS_BASE_URL
+
 RUN mkdir -p src/environments && \
     echo "export const environment = {" \
     "  TESTS_BASE_URL: ''," \
