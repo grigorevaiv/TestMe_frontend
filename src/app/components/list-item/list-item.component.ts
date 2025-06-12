@@ -1,10 +1,10 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { Test, Block, Scale, User } from '../../interfaces/test.interface';
-import { NgIf, SlicePipe } from '@angular/common';
+import { JsonPipe, NgIf, SlicePipe } from '@angular/common';
 
 @Component({
   selector: 'app-list-item',
-  imports: [NgIf, SlicePipe],
+  imports: [NgIf, SlicePipe, JsonPipe],
   templateUrl: './list-item.component.html',
   styleUrl: './list-item.component.css'
 })
@@ -33,6 +33,11 @@ export class ListItemComponent {
   @Output() edit = new EventEmitter<Test | Block | Scale | User>();
   @Output() delete = new EventEmitter<void>();
   @Output() view = new EventEmitter<void>();
+  @Output() reactivate = new EventEmitter<void>();
+  @Output() tagClick = new EventEmitter<string>();
 
+  onTagClicked(tag: string) {
+    this.tagClick.emit(tag);
+  }
 
 }

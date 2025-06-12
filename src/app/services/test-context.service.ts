@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, catchError, forkJoin, map, of, tap } from 'rxjs';
+import { BehaviorSubject, Observable, catchError, forkJoin, map, of, take, tap } from 'rxjs';
 import { TestService } from './test.service';
 import { Test, Block, Scale, Question, Answer, Weight, Norm, Interpretation } from '../interfaces/test.interface';
 
@@ -16,6 +16,9 @@ interface FullTestContext {
 
 @Injectable({ providedIn: 'root' })
 export class TestContextService {
+  private contextLoaded = false;
+  private currentTestId: number | null = null;
+
   private context$ = new BehaviorSubject<FullTestContext>({
     test: null,
     blocks: null,
@@ -33,9 +36,16 @@ export class TestContextService {
     return obs.pipe(catchError(() => of(null)));
   }
 
-  loadContextIfNeeded(testId: number | null, mode: string): Observable<FullTestContext> {
+  loadContextIfNeeded(testId: number | null, mode: string, force: boolean = false): Observable<FullTestContext> {
+    if (
+      this.contextLoaded &&
+      !force &&
+      this.currentTestId === testId
+    ) {
+      return this.getContext().pipe(take(1));
+    }
+
     if (!testId) {
-      console.warn('New test, context is empty');
       const emptyContext: FullTestContext = {
         test: null,
         blocks: null,
@@ -47,11 +57,13 @@ export class TestContextService {
         interpretations: null
       };
       this.context$.next(emptyContext);
+      this.contextLoaded = true;
+      this.currentTestId = null;
       return of(emptyContext);
     }
 
     return forkJoin({
-      test: this.safe(this.testService.getTestById(testId)),
+      test: this.testService.getTestById(testId),
       blocks: this.safe(this.testService.getBlocks(testId)),
       scales: this.safe(this.testService.getScales(testId)),
       questions: this.safe(this.testService.getQuestions(testId)),
@@ -60,8 +72,20 @@ export class TestContextService {
       norms: this.safe(this.testService.getNorms(testId)),
       interpretations: this.safe(this.testService.getInterpretations(testId)),
     }).pipe(
-      tap((ctx) => this.context$.next(ctx))
+      tap((ctx) => {
+        this.context$.next(ctx);
+        this.contextLoaded = true;
+        this.currentTestId = testId;
+      })
     );
+  }
+  
+  ensureContext(testId: number | null, mode: string): Observable<FullTestContext> {
+    return this.loadContextIfNeeded(testId, mode, false);
+  }
+
+  isContextLoaded(): boolean {
+    return this.contextLoaded;
   }
 
   getContext(): Observable<FullTestContext> {
@@ -111,7 +135,10 @@ export class TestContextService {
       norms: null,
       interpretations: null
     });
+    this.contextLoaded = false;
+    this.currentTestId = null;
   }
+
 
 }
 

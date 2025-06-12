@@ -27,16 +27,23 @@ export class PatientResourceService {
   }
 
   patientsResource = rxResource({
-    request: () => ({}),
+    request: () => {
+      this.refreshTrigger();
+      return {};             
+    },
     loader: () => this.patientService.getPatients()
   });
 
   patientResource = rxResource({
-    request: () => this.patientId$(),
+    request: () => {
+      this.refreshTrigger();
+      return this.patientId$();
+    },
     loader: ({ request }) =>
       request.pipe(
         switchMap((patientId) => this.patientService.getPatientById(patientId))
       )
   });
+
 
 }

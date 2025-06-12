@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 
 @Component({
   selector: 'app-navbar',
@@ -8,16 +8,25 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
   styleUrl: './navbar.component.css'
 })
 export class NavbarComponent {
-
+  constructor(private router: Router) {}
   dropdownOpen = false;
   menuOpen = false;
+  adminName: string = '';
+
+  ngOnInit() {
+    const fullname = localStorage.getItem('admin_name');
+    if(fullname) {
+      const name = fullname.split(' ')[0];
+      this.adminName = name || 'Admin';
+    }
+  }
   
   toggleDropdown() {
     this.dropdownOpen = !this.dropdownOpen;
   }
 
   logout() {
-    console.log('Logging out...');
-    // тут логика выхода
+    localStorage.clear();
+    this.router.navigate(['/login']);    
   }
 }

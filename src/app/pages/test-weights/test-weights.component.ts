@@ -55,8 +55,6 @@ export class TestWeightsComponent {
 
 
 async ngOnInit(): Promise<void> {
-  this.testContextService.resetContext();
-
   const idParam = this.route.snapshot.paramMap.get('testId');
   const mode = this.route.snapshot.paramMap.get('mode') || 'new';
   const storedId = this.sessionStorage.getTestId();
@@ -69,8 +67,9 @@ async ngOnInit(): Promise<void> {
 
   this.testId = id;
   this.mode = mode;
+  this.sessionStorage.setTestId(id);
 
-  await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode));
+  await firstValueFrom(this.testContextService.ensureContext(this.testId, this.mode));
 
   this.testContextService.getTest().subscribe(test => {
     this.testState = test?.state ?? null;
@@ -90,14 +89,15 @@ async ngOnInit(): Promise<void> {
 
   this.testContextService.getAnswers().subscribe(answers => {
     this.answers = answers || [];
-    this.initializeWeightsForms();  // тут инициализация уже после всех данных
+    this.initializeWeightsForms();  // инициализация после загрузки ответов
   });
 
   this.testContextService.getWeights().subscribe(weights => {
     this.weights = weights || [];
-    this.patchWeightsToForm(this.weights); // и патч после
+    this.patchWeightsToForm(this.weights);  // патч после загрузки весов
   });
 }
+
 
 
   get completedStepsArray(): number[] {
@@ -339,7 +339,7 @@ async saveWeights(navigate: boolean = false): Promise<void> {
       this.testService.updateTestStateStep(this.testId!, this.testState)
     );
     console.log('Test state updated to step 6:', this.testState);
-    await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit'));
+    await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit', true));
     this.router.navigate(['/test-weights/edit', this.testId]); 
   }
 

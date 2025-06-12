@@ -6,34 +6,47 @@ import { ResourceService } from '../../services/resource.service';
 import { SessionStorageService } from '../../services/session-storage.service';
 import { PatientResourceService } from '../../services/patient-resource.service';
 import { ListItemComponent } from '../../components/list-item/list-item.component';
+import { SearchFilterComponent } from '../../components/search-filter/search-filter.component';
+import { ConfirmDialogComponent } from '../../components/confirm-dialog/confirm-dialog.component';
+import { PatientService } from '../../services/patient.service';
+import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-patients',
-  imports: [ListItemComponent],
+  imports: [ListItemComponent, SearchFilterComponent, ConfirmDialogComponent],
   templateUrl: './patients.component.html',
   styleUrl: './patients.component.css'
 })
 export class PatientsComponent {
-  resourceService = inject(ResourceService);
   route = inject(Router);
   router = inject (ActivatedRoute);
   sessionStorage = inject(SessionStorageService);
   resouceService = inject(PatientResourceService);
+  patientService = inject(PatientService);
   patients: User[] = [];
+  filteredPatients: User[] = [];
+  placeholder = 'Search patients...';
+  confirmVisible = false;
+  confirmMessage = '';
+  private pendingAction: (() => void) | null = null;
+
   constructor() {
     effect(() => {
       const data = this.resouceService.patientsResource.value();
       if (data) {
-      this.patients = data/*.filter((patient: User) => {
-        return patient.assignedToAdmin && patient.isActive;
-      });*/
+      this.patients = data;
+      this.filteredPatients = data;
       }
       console.log('Patients data:', this.patients);
     });
   }
 
+  ngOnInit() {
+    this.resouceService.triggerRefresh();
+  }
+
   onCreatePatient(){
-    this.route.navigate(['/patient/add']);
+    this.route.navigate(['/patient/new']);
   }
 
   onEditPatient(patient: User) {
@@ -44,7 +57,35 @@ export class PatientsComponent {
     this.route.navigate(['/patient/history', patient.id]);
   }
 
-  // todo: implement delete test functionality
   onDeletePatient(patient: User) {
+    this.confirmMessage = 'Are you sure you want to deactivate this patient?';
+    this.confirmVisible = true;
+    this.pendingAction = async () => {
+      await firstValueFrom(this.patientService.deactivatePatient(patient.id!));
+      this.resouceService.triggerRefresh();
+    };
+  }
+
+  onReactivatePatient(patient: User) {
+    this.confirmMessage = 'Do you want to reactivate this patient?';
+    this.confirmVisible = true;
+    this.pendingAction = async () => {
+      await firstValueFrom(this.patientService.reactivatePatient(patient.id!));
+      this.resouceService.triggerRefresh();
+    };
+  }
+
+
+  onConfirmDialog() {
+    this.confirmVisible = false;
+    if (this.pendingAction) {
+      this.pendingAction();
+      this.pendingAction = null;
+    }
+  }
+
+  onCancelDialog() {
+    this.confirmVisible = false;
+    this.pendingAction = null;
   }
 }

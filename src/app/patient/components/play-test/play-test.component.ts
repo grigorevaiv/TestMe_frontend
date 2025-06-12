@@ -4,21 +4,25 @@ import { PlayTestService } from '../../services/play-test.service';
 import { TestService } from '../../../services/test.service';
 import { JsonPipe, NgClass } from '@angular/common';
 import { ToastService } from '../../../services/toast.service';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { PatientService } from '../../../services/patient.service';
+import { HeaderComponent } from "../header/header.component";
+import { User } from '../../../interfaces/test.interface';
+import { FooterComponent } from '../footer/footer.component';
 
 
 
 @Component({
   selector: 'app-play-test',
   standalone: true,
-  imports: [JsonPipe, NgClass],
+  imports: [JsonPipe, NgClass, HeaderComponent, FooterComponent],
   templateUrl: './play-test.component.html',
 })
 export class PlayTestComponent {
   private playTestService = inject(PlayTestService);
   private testService = inject(TestService);
   private route = inject(ActivatedRoute);
+  router = inject(Router);
   toast = inject(ToastService);
   patientService = inject(PatientService);
 
@@ -31,6 +35,8 @@ export class PlayTestComponent {
   blockStarted = this.playTestService.blockStarted;
   testCompleted = this.playTestService.testCompleted;
   timeLeft = this.playTestService.timeLeft;
+  resultsSaved = false;
+  
 
   get selectedAnswers(): string[] {
     const q = this.question();
@@ -38,6 +44,44 @@ export class PlayTestComponent {
     return this.playTestService.userAnswers.get(q.id) ?? [];
   }
 
+  async ngOnInit() {
+    const token = this.route.snapshot.paramMap.get('token');
+    if (!token) {
+      this.toast.show({ message: 'Missing token', type: 'error' });
+      return;
+    }
+
+    try {
+      const status = await firstValueFrom(this.patientService.checkTokenStatus(token));
+      
+      if (status.used) {
+        this.toast.show({ message: 'You already has completed the test', type: 'info' });
+        await this.router.navigate(['/thank-you']);
+        return;
+      }
+
+      const session = this.playTestService.sessionStorage.getTestSession();
+      if (!session) {
+        this.toast.show({ message: 'Session not found', type: 'error' });
+        await this.router.navigate(['/play-test', token, 'verify']);
+        return;
+      }
+
+      this.playTestService.init(session);
+
+    } catch (err) {
+      console.error('Token check failed:', err);
+      this.toast.show({ message: 'Invalid or expired token.', type: 'error' });
+      await this.router.navigate(['/']);
+    }
+  }
+
+  ngAfterViewChecked(): void {
+    if (this.testCompleted() && !this.resultsSaved) {
+      this.saveResults();
+      this.resultsSaved = true;
+    }
+  }
 
   startBlock() {
     this.playTestService.blockStarted.set(true);
@@ -95,7 +139,7 @@ async saveResults() {
     console.error('Нет сессии теста');
     return;
   }
-
+  console.log('Токен для сессии:', session.token);
   const allQuestions = this.playTestService.questionsWithAnswers.map(q => q.id);
   const allWeights = this.playTestService.weights;
   const allAnswers = this.playTestService.answers;
@@ -117,8 +161,8 @@ async saveResults() {
       if (fallbackAnswer) {
         completeAnswers[questionId] = [String(fallbackAnswer.id)];
       } else {
-        console.warn(`⚠️ Нет ответа с весом 0 для вопроса ${questionId}`);
-        completeAnswers[questionId] = []; // или не включать совсем
+        console.warn(`Нет ответа с весом 0 для вопроса ${questionId}`);
+        completeAnswers[questionId] = [];
       }
     }
   }
@@ -126,19 +170,20 @@ async saveResults() {
   const payload = {
     userId: session.userId,
     testId: session.testId,
-    answers: completeAnswers
+    answers: completeAnswers,
+    token: session.token
   };
 
   console.log('Payload to send:', payload);
 
   try {
     const response : any = await firstValueFrom(this.testService.saveTestResults(session.testId, payload));
-    this.toast.show({ message: 'Результаты успешно сохранены', type: 'success' });
+    this.toast.show({ message: 'Results are successfully saved', type: 'success' });
     const results = response.finalResult;
     console.log('Results saved:', results);
   } catch (error) {
-    console.error('Ошибка при сохранении результатов', error);
-    this.toast.show({ message: 'Не удалось сохранить результаты', type: 'error' });
+    console.error('Error on saving results', error);
+    this.toast.show({ message: 'You have already saved the results', type: 'info' });
   }
 }
 
@@ -160,6 +205,7 @@ async saveResults() {
   get blockIds(): number[] {
     return Array.from(this.playTestService.questionsByBlock.keys());
   }
+
 
 
 }

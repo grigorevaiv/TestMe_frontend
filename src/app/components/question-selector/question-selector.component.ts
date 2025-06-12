@@ -25,7 +25,7 @@ export class QuestionSelectorComponent {
       this.questions = this.resourceService.allQuestionsResource.value() ?? [];
       this.tags = this.resourceService.allTagsResource.value() ?? [];
       console.log('Questions:', this.questions);
-      this.applyFilters(); // показываем всё сразу
+      this.applyFilters();
     });
   }
 

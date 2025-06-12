@@ -39,55 +39,53 @@ export class TestNormsComponent {
   step =7;
   testContextService = inject(TestContextService);
 
-  async ngOnInit(): Promise<void> {
-    this.testContextService.resetContext();
+async ngOnInit(): Promise<void> {
+  const idParam = this.route.snapshot.paramMap.get('testId');
+  const mode = this.route.snapshot.paramMap.get('mode') || 'new';
+  const storedId = this.sessionStorage.getTestId();
+  const id = idParam ? Number(idParam) : storedId;
 
-    const idParam = this.route.snapshot.paramMap.get('testId');
-    const mode = this.route.snapshot.paramMap.get('mode') || 'new';
-    const storedId = this.sessionStorage.getTestId();
-    const id = idParam ? Number(idParam) : storedId;
-
-    if (!id) {
-      console.warn('[TestNormsComponent] No test ID found');
-      return;
-    }
-
-    this.testId = id;
-    this.mode = mode;
-    this.sessionStorage.setTestId(id);
-
-    await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode));
-
-    this.testContextService.getTest().subscribe(test => {
-      this.testState = test?.state ?? null;
-      this.testId = test?.id ?? this.testId;
-    });
-
-    this.testContextService.getScales().subscribe(scales => {
-      if (scales) {
-        console.log('Scales received:', scales);
-        this.scales = scales;
-        this.initializeNormsForms();
-      }
-    });
-
-    this.testContextService.getNorms().subscribe(norms => {
-      if (norms) {
-        console.log('Norms received:', norms);
-        this.norms = norms;
-        this.patchNormsToForm(norms);
-      } else {
-        console.log('No norms found for testId:', this.testId);
-      }
-    });
-
-    this.testContextService.getWeights().subscribe(weights => {
-      if (weights) {
-        console.log('Weights received:', weights);
-        this.weights = weights;
-      }
-    });
+  if (!id) {
+    console.warn('[TestNormsComponent] No test ID found');
+    return;
   }
+
+  this.testId = id;
+  this.mode = mode;
+  this.sessionStorage.setTestId(id);
+
+  await firstValueFrom(this.testContextService.ensureContext(this.testId, this.mode));
+
+  this.testContextService.getTest().subscribe(test => {
+    this.testState = test?.state ?? null;
+    this.testId = test?.id ?? this.testId;
+  });
+
+  this.testContextService.getScales().subscribe(scales => {
+    if (scales) {
+      console.log('Scales received:', scales);
+      this.scales = scales;
+      this.initializeNormsForms();
+    }
+  });
+
+  this.testContextService.getNorms().subscribe(norms => {
+    if (norms) {
+      console.log('Norms received:', norms);
+      this.norms = norms;
+      this.patchNormsToForm(norms);
+    } else {
+      console.log('No norms found for testId:', this.testId);
+    }
+  });
+
+  this.testContextService.getWeights().subscribe(weights => {
+    if (weights) {
+      console.log('Weights received:', weights);
+      this.weights = weights;
+    }
+  });
+}
 
 
   normsForScale: {[scaleId: number]: FormGroup} = {};
@@ -201,7 +199,7 @@ setTheoreticalNorms(scaleId: number) {
           type: normsForm.get('type')?.value
         };
       });
-
+    console.log('Updating norms payload:', existingNorms);
     if (existingNorms.length === 0) return [];
 
     const updatedNorms = await firstValueFrom(this.testService.updateNorms(existingNorms));
@@ -231,11 +229,10 @@ setTheoreticalNorms(scaleId: number) {
         if(this.testState.currentStep < 7) {
           this.testState.currentStep = 7;
           this.testService.updateTestStateStep(this.testId!, this.testState);
-          await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit'));
           this.router.navigate(['/test-norms/edit', this.testId]); 
         }
       }
-      
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit', true));
       if (navigate) {
         this.handleNavigation();
       }

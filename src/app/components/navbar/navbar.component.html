@@ -34,7 +34,7 @@
           <button 
             (click)="toggleDropdown()"
             class="flex items-center text-base sm:text-lg md:text-xl font-semibold font-interactive text-gray-700 hover:text-sky-700 focus:outline-none">
-            Hi, Katya!
+            Hi, {{adminName}}!
             <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" stroke-width="2"
                  viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 9l-7 7-7-7" />
@@ -43,10 +43,6 @@
 
           @if (dropdownOpen) {
             <div class="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-md shadow-lg z-10">
-              <a href="#"
-                 class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition">
-                Profile
-              </a>
               <a href="#"
                  (click)="logout()"
                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition">
@@ -63,7 +59,6 @@
     <div class="sm:hidden mt-2 space-y-2">
       <a class="block text-base text-gray-700 hover:text-sky-700 transition font-interactive" [routerLink]="'/'">Tests</a>
       <a class="block text-base text-gray-700 hover:text-sky-700 transition font-interactive">Patients</a>
-      <a class="block text-base text-gray-700 hover:text-sky-700 transition font-interactive">Profile</a>
       <a class="block text-base text-gray-700 hover:text-sky-700 transition font-interactive" (click)="logout()">Log out</a>
     </div>
     }

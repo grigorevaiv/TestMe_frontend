@@ -28,7 +28,6 @@ import { NgIf } from '@angular/common';
 export class TestBlocksComponent {
   private fb = inject(FormBuilder);
   private route = inject(ActivatedRoute);
-  //private cacheService = inject(CacheService);
   private sessionStorage = inject(SessionStorageService);
   private testService = inject(TestService);
   private router = inject(Router);
@@ -50,7 +49,6 @@ export class TestBlocksComponent {
   isBlockFormActive: boolean = false;
   pendingBlocks: Block[] = [];
 
-
   newBlockForm = this.fb.group({
     name: ['', [Validators.required, Validators.minLength(5)]],
     instructions: ['', [Validators.required, Validators.minLength(100)]],
@@ -64,9 +62,7 @@ export class TestBlocksComponent {
     testId: this.testId
   });
 
-
   async ngOnInit(): Promise<void> {
-    this.testContextService.resetContext();
     const idParam = this.route.snapshot.paramMap.get('testId');
     const mode = this.route.snapshot.paramMap.get('mode') || 'new';
     const storedId = this.sessionStorage.getTestId();
@@ -80,7 +76,7 @@ export class TestBlocksComponent {
     this.testId = id;
     this.mode = mode;
 
-    await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode));
+    await firstValueFrom(this.testContextService.ensureContext(this.testId, this.mode));
 
     this.testContextService.getTest().subscribe(test => {
       if (test) {
@@ -97,14 +93,13 @@ export class TestBlocksComponent {
   }
 
   beforeUnloadHandler(event: BeforeUnloadEvent) {
-  if (this.pendingBlocks.length > 0) {
-    event.preventDefault();
-    event.returnValue = 'You have unsaved blocks. Are you sure you want to leave?';
-    return event;
+    if (this.pendingBlocks.length > 0) {
+      event.preventDefault();
+      event.returnValue = 'You have unsaved blocks. Are you sure you want to leave?';
+      return event;
+    }
+    return;
   }
-  return;
-}
-
 
   private addValidatorsToForm() {
     this.newBlockForm.get('hasTimeLimit')?.valueChanges.subscribe((hasTimeLimit) => {
@@ -139,7 +134,6 @@ export class TestBlocksComponent {
     this.resetToDefault();
     this.isBlockFormActive = false;
   }
-
 
   resetToDefault() {
     this.newBlockForm.reset({
@@ -183,20 +177,9 @@ export class TestBlocksComponent {
 
     this.editingBlockId = block.id ?? null;
     this.isEditing = true;
-
-
     this.selectedBlock = block;
   }
 
-
-  onDeleteBlock(block: Block): void {
-    if (this.testId) {
-      this.testService.deleteBlock(this.testId, block.id!).subscribe(() => {
-        console.log('Block deleted:', block);
-        this.resourceService.triggerRefresh();
-      });
-    }
-  }
 
   selectedBlock: Block | null = null;
   confirmDelete(block: Block) {
@@ -204,27 +187,30 @@ export class TestBlocksComponent {
     this.showDeleteDialog = true;
   }
 
-  handleDeleteConfirmed() {
+  async handleDeleteConfirmed() {
     if (!this.selectedBlock) return;
 
     const block = this.selectedBlock;
 
     if (!block.id) {
-  
       this.pendingBlocks = this.pendingBlocks.filter(b => b !== block);
       this.toast.show({ message: 'Block removed', type: 'info' });
     } else if (this.testId) {
-
-      this.testService.deleteBlock(this.testId, block.id).subscribe(() => {
-        this.toast.show({ message: 'Block deleted', type: 'success' });
-        this.resourceService.triggerRefresh();
-      });
+      try {
+        await firstValueFrom(this.testService.deleteBlock(this.testId, block.id));
+        this.toast.show({ message: 'Block deleted successfully', type: 'success' });
+        await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', true));
+      }
+      catch (error) {
+        console.error('Error deleting block:', error);
+        this.toast.show({ message: 'Failed to delete block', type: 'error' });
+        return;
+      }
     }
 
     this.showDeleteDialog = false;
     this.selectedBlock = null;
   }
-
 
   handleDeleteCancelled() {
     this.showDeleteDialog = false;
@@ -254,27 +240,24 @@ export class TestBlocksComponent {
     };
 
     if (!this.selectedBlock.id) {
-
       const index = this.pendingBlocks.findIndex(b => b === this.selectedBlock);
       if (index !== -1) {
         this.pendingBlocks[index] = updatedBlock;
         this.toast.show({ message: 'Block updated', type: 'success' });
       }
     } else if (this.testId) {
-
       updatedBlock.testId = this.testId;
       await firstValueFrom(
         this.testService.updateBlock(this.testId, updatedBlock.id!, updatedBlock)
       );
       this.toast.show({ message: 'Block updated successfully!', type: 'success' });
-      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit'));
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', true));
     }
 
     this.resetToDefault();
     this.isEditing = false;
     this.selectedBlock = null;
   }
-
 
   cancelEdit() {
     this.isEditing = false;
@@ -302,14 +285,14 @@ export class TestBlocksComponent {
     if (this.pendingBlocks.length > 0) {
       await firstValueFrom(this.testService.addBlocksBatch(this.testId, this.pendingBlocks));
       this.toast.show({ message: 'All blocks saved', type: 'success' });
-      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode));
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode, true));
       this.pendingBlocks = [];
     }
 
     if (this.testState.currentStep < 2) {
       this.testState.currentStep = 2;
       await firstValueFrom(this.testService.updateTestStateStep(this.testId, this.testState));
-      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit'));
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', true));
       this.router.navigate(['/test-blocks/edit', this.testId]);
       return;
     }
@@ -319,18 +302,16 @@ export class TestBlocksComponent {
     if (navigate) this.handleNavigation(this.testState);
   }
 
-
   private handleNavigation(testState: any) {
     const step = testState.currentStep;
     if (step === 2) {
       this.toast.show({
-          message: 'Going to next step...',
-          type: 'info'
+        message: 'Going to next step...',
+        type: 'info'
       });
       setTimeout(() => {
         this.router.navigate(['/test-scales/new']);
       }, 700);
-
     } else if (step > 2) {
       if (!this.testId) {
         console.error('Cannot navigate to edit: testId is missing');
@@ -357,11 +338,10 @@ export class TestBlocksComponent {
   }
 
   onStepSelected(step: number) {
-    const id = this.testId || this.sessionStorage.getTestId(); 
+    const id = this.testId || this.sessionStorage.getTestId();
     if (!id || !stepRoutes[step]) return;
     this.router.navigate(stepRoutes[step](id));
   }
-
-
 }
+
 

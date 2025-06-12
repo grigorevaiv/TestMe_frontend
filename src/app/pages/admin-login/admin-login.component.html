@@ -1,0 +1,19 @@
+<div class="min-h-screen flex items-center justify-center bg-gray-100">
+  <div class="w-[40%] mx-auto p-6 bg-white shadow rounded">
+    <h2 class="text-xl font-semibold mb-4 text-sky-700">TestMe</h2>
+    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+      <div class="mb-4">
+        <label>Email</label>
+        <input type="email" formControlName="email" class="w-full border rounded p-2" />
+      </div>
+      <div class="mb-4">
+        <label>Password</label>
+        <input type="password" formControlName="password" class="w-full border rounded p-2" />
+      </div>
+      <div *ngIf="error" class="text-red-600 mb-4">{{ error }}</div>
+      <button type="submit" [disabled]="loading" class="bg-sky-700 text-white px-4 py-2 rounded font-interactive hover:bg-sky-600 transition-colors">
+        {{ loading ? 'Logging in...' : 'Login' }}
+      </button>
+    </form>
+  </div>
+</div>

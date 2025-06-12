@@ -7,6 +7,7 @@ export interface Test {
     instructions: string;
     state?: State | null;
     tags?: string[];
+    adminId?: number;
 }
 
 export interface Block {
@@ -94,7 +95,7 @@ export interface User {
     birthDate: string;
     isActive?: boolean;
     email: string;
-    assignedToAdmin: number;
+    assignedToAdmin?: number;
 }
 
 export interface InvitationPayload {

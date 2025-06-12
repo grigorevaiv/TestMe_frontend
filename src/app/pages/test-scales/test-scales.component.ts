@@ -56,8 +56,6 @@ export class TestScalesComponent {
   });
 
   async ngOnInit(): Promise<void> {
-    this.testContextService.resetContext();
-
     const idParam = this.route.snapshot.paramMap.get('testId');
     const mode = this.route.snapshot.paramMap.get('mode') || 'new';
     const storedId = this.sessionStorage.getTestId();
@@ -72,7 +70,7 @@ export class TestScalesComponent {
     this.mode = mode;
     this.sessionStorage.setTestId(id);
 
-    await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode));
+    await firstValueFrom(this.testContextService.ensureContext(this.testId, this.mode));
 
     this.testContextService.getTest().subscribe(test => {
       if (test) {
@@ -83,7 +81,7 @@ export class TestScalesComponent {
     this.testContextService.getBlocks().subscribe(blocks => {
       this.blocks = blocks || [];
       this.newScaleForm.patchValue({
-        blockId: this.blocks[0].id || null,
+        blockId: this.blocks[0]?.id || null,
       });
     });
 
@@ -93,13 +91,12 @@ export class TestScalesComponent {
 
     this.addValidatorsToForm();
     window.addEventListener('beforeunload', this.beforeUnloadHandler);
-
   }
 
   ngOnDestroy(): void {
     window.removeEventListener('beforeunload', this.beforeUnloadHandler);
   }
-  
+
   private beforeUnloadHandler = (event: BeforeUnloadEvent) => {
     if (this.isEditing || this.pendingScales.length > 0) {
       event.preventDefault();
@@ -125,7 +122,6 @@ export class TestScalesComponent {
   }
 
   addNewScale() {
-    console.log('Scale type', this.newScaleForm.value.scaleType);
     if (this.newScaleForm.invalid) {
       this.newScaleForm.markAllAsTouched();
       this.toast.show({
@@ -136,7 +132,6 @@ export class TestScalesComponent {
     }
 
     const newScale = this.newScaleForm.value as Scale;
-    console.log('Adding new scale:', newScale);
     this.pendingScales.push({
       ...newScale,
       testId: this.testId!,
@@ -158,8 +153,6 @@ export class TestScalesComponent {
   }
 
   onEditScale(scale: Scale) {
-    console.log('Scale type', scale.scaleType);
-
     this.newScaleForm.patchValue({
       scaleType: scale.scaleType,
       pole1: scale.pole1,
@@ -205,7 +198,7 @@ export class TestScalesComponent {
     } else {
       await firstValueFrom(this.testService.updateScale(updated.id!, updated));
       this.toast.show({ message: 'Scale updated successfully!', type: 'success' });
-      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit'));
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', true));
     }
 
     this.cancelEdit();
@@ -216,17 +209,22 @@ export class TestScalesComponent {
     this.showDeleteDialog = true;
   }
 
-  handleDeleteConfirmed() {
+  async handleDeleteConfirmed() {
     if (!this.selectedScale) return;
 
     if (!this.selectedScale.id) {
       this.pendingScales = this.pendingScales.filter(s => s !== this.selectedScale);
       this.toast.show({ message: 'Pending scale removed', type: 'info' });
     } else if (this.testId) {
-      this.testService.deleteScale(this.selectedScale.id).subscribe(() => {
-        this.toast.show({ message: 'Scale deleted', type: 'success' });
-        this.resourceService.triggerRefresh();
-      });
+      try {
+        await firstValueFrom(this.testService.deleteScale(this.selectedScale.id));
+        this.toast.show({ message: 'Scale deleted successfully!', type: 'success' });
+        await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', true));
+      }
+      catch (error) {
+        console.error('Error deleting scale:', error);
+        this.toast.show({ message: 'Failed to delete scale', type: 'error' });
+      }
     }
 
     this.showDeleteDialog = false;
@@ -264,13 +262,13 @@ export class TestScalesComponent {
       await firstValueFrom(this.testService.addScalesBatch(this.testId, this.pendingScales));
       this.toast.show({ message: 'All scales saved!', type: 'success' });
       this.pendingScales = [];
-      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit'));
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', true));
     }
 
     if (this.testState.currentStep < 3) {
       this.testState.currentStep = 3;
       await firstValueFrom(this.testService.updateTestStateStep(this.testId, this.testState));
-      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit'));
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', true));
       this.router.navigate(['/test-scales/edit', this.testId]);
       return;
     }
@@ -290,7 +288,6 @@ export class TestScalesComponent {
       setTimeout(() => {
         this.router.navigate(['/test-questions/new']);
       }, 700);
-      
     } else if (step > 3) {
       if (!this.testId) {
         console.error('Cannot navigate to edit: testId is missing');
@@ -305,7 +302,6 @@ export class TestScalesComponent {
     if (!id || !stepRoutes[step]) return;
     this.router.navigate(stepRoutes[step](id));
   }
-
-
 }
+
 

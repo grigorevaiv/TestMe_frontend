@@ -3,15 +3,16 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Test } from '../../interfaces/test.interface';
 import { ResourceService } from '../../services/resource.service';
 import { PatientService } from '../../services/patient.service';
-import { NgFor, NgIf } from '@angular/common';
+import { DatePipe, JsonPipe, NgFor, NgIf } from '@angular/common';
 import { NgModel } from '@angular/forms';
 import { ToastService } from '../../services/toast.service';
-import { forkJoin } from 'rxjs';
+import { catchError, forkJoin, of } from 'rxjs';
 import { TestService } from '../../services/test.service';
+import { HttpErrorResponse } from '@angular/common/http';
 
 @Component({
   selector: 'app-view-results',
-  imports: [NgIf, NgFor],
+  imports: [NgIf, NgFor, JsonPipe, DatePipe],
   templateUrl: './view-results.component.html',
   styleUrl: './view-results.component.css'
 })
@@ -31,7 +32,8 @@ export class ViewResultsComponent {
     effect(() => {
       const data = this.testResource.testsResource.value();
       if (data) {
-        this.tests = data;
+        const activeTests = data.filter(test => test.state?.state === 'active');
+        this.tests = activeTests;
         console.log('Tests', this.tests);
       }
     });
@@ -90,6 +92,7 @@ initializeRouteParams(): void {
     this.toggleTestSelection(testId, input.checked);
   }
 
+  
   saveAssignedTests() {
     if (!this.patientId || !this.patientEmail) {
       this.toast.show({ message: 'Missing patient ID or email', type: 'error' });
@@ -104,18 +107,23 @@ initializeRouteParams(): void {
         userEmail: this.patientEmail!,
         testId: test.id!
       };
-      return this.patientService.assignTestToPatient(payload);
+
+    return this.patientService.assignTestToPatient(payload).pipe(
+        catchError(error => {
+          console.warn(`Test ${test.id} failed:`, error);
+          const message = error instanceof HttpErrorResponse ? error.error.detail : 'An error occurred while assigning the test';
+          this.toast.show({ message: message, type: 'error' });
+          return of(null);
+        })
+      );
     });
 
-    forkJoin(requests).subscribe({
-      next: () => {
-        this.toast.show({ message: 'Invitations sent successfully', type: 'success' });
-        this.closeModal();
-      },
-      error: (err) => {
-        console.error('Error on sending invitations:', err);
-        this.toast.show({ message: 'Error on sending invitations', type: 'error' });
+    forkJoin(requests).subscribe(results => {
+      const successCount = results.filter(r => r !== null).length;
+      if (successCount > 0) {
+        this.toast.show({ message: `${successCount} invitations sent successfully`, type: 'success' });
       }
+      this.closeModal();
     });
   }
 

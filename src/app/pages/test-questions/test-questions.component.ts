@@ -46,13 +46,12 @@ export class TestQuestionsComponent {
   imagePreviews: { [blockId: number]: { [questionIndex: number]: string } } = {};
   isQuestionsModified: { [blockId: number]: boolean } = {};
   questionsToDelete: number[] = [];
+  isEditMode = false;
 
   @ViewChild(QuestionSelectorComponent, { static: false })
   selectorComponent?: QuestionSelectorComponent;
 
   async ngOnInit(): Promise<void> {
-    this.testContextService.resetContext();
-
     const idParam = this.route.snapshot.paramMap.get('testId');
     const mode = this.route.snapshot.paramMap.get('mode') || 'new';
     const storedId = this.sessionStorage.getTestId();
@@ -65,9 +64,10 @@ export class TestQuestionsComponent {
 
     this.testId = id;
     this.mode = mode;
+    this.isEditMode = this.mode !== 'new';
     this.sessionStorage.setTestId(id);
 
-    await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode));
+    await firstValueFrom(this.testContextService.ensureContext(this.testId, this.mode));
 
     this.testContextService.getTest().subscribe(test => {
       this.testState = test?.state ?? null;
@@ -82,7 +82,6 @@ export class TestQuestionsComponent {
     });
 
     this.initializeQuestionsForms();
-
   }
 
 
@@ -446,9 +445,11 @@ async saveAllQuestions(newQuestions?: Question[]) {
       await this.saveAllQuestions();
       console.log('New questions saved successfully');
       this.toast.show({message: 'Questions saved successfully', type: 'success'});
+      this.resourceService.triggerRefresh();
     } else {
       this.updateQuestions();
       this.toast.show({message: 'Questions updated successfully', type: 'success'});
+      this.resourceService.triggerRefresh();
     }
 
     let targetState = this.testState;
@@ -458,7 +459,7 @@ async saveAllQuestions(newQuestions?: Question[]) {
         this.testService.updateTestStateStep(this.testId!, this.testState)
       );
       console.log('Test state updated to step 4:', targetState);
-      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit'));
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit', true));
       this.router.navigate(['/test-questions/edit', this.testId]);
     }
 
@@ -560,7 +561,7 @@ onDragOver(event: DragEvent) {
   event.preventDefault(); 
 }
 
-onDrop(event: DragEvent, blockId: number, formIndex: number) {
+/*onDrop(event: DragEvent, blockId: number, formIndex: number) {
   event.preventDefault();
   const raw = event.dataTransfer?.getData('application/json');
   if (!raw) return;
@@ -610,6 +611,54 @@ onDrop(event: DragEvent, blockId: number, formIndex: number) {
 
     this.selectorComponent?.removeQuestion?.(droppedQuestion.id!);
   }
+*/
+
+onDrop(event: DragEvent, blockId: number, formIndex: number) {
+  event.preventDefault();
+  const raw = event.dataTransfer?.getData('application/json');
+  if (!raw) return;
+
+  const droppedQuestion: Question = JSON.parse(raw);
+  const formArray = this.questionsOfBlock[blockId];
+  const form = formArray?.at(formIndex);
+  if (!form) return;
+
+  const existingText = form.get('text')?.value?.trim();
+  const existingImage = form.get('imageUrl')?.value;
+  const existingHasImage = form.get('hasImage')?.value;
+  const existingId = form.get('id')?.value;
+  const existingRealId = form.get('realId')?.value;
+
+  const isOccupied = !!existingText || !!existingImage;
+
+  if (isOccupied && this.isEditMode) {
+    console.warn('Replacing existing question:', existingText);
+    const existingQuestion: Question = {
+      id: existingId,
+      realId: existingRealId,
+      text: existingText,
+      imageUrl: existingImage || '',
+      isActive: true,
+      hasImage: !!existingImage || existingHasImage,
+      blockId: blockId,
+    };
+    this.selectorComponent?.restoreQuestion(existingQuestion);
+  }
+
+  const tempId = `temp-${Date.now()}-${Math.random()}`;
+
+  form.patchValue({
+    id: tempId,
+    realId: droppedQuestion.id,
+    text: droppedQuestion.text,
+    imageUrl: droppedQuestion.imageUrl || '',
+    isActive: true,
+    hasImage: !!droppedQuestion.imageUrl,
+    isCloned: true,
+  });
+
+  this.selectorComponent?.removeQuestion?.(droppedQuestion.id!);
+}
 
 showSelector = false;
 

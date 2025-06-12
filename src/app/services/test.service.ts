@@ -36,7 +36,6 @@ export class TestService {
     return this.http.put<State>(`${this.baseUrl}/${testId}/states`, state);
   }
 
-  // Блоки
   getBlocks(testId: number): Observable<Block[]> {
     return this.http.get<Block[]>(`${this.baseUrl}/${testId}/blocks`);
   }
@@ -203,5 +202,18 @@ export class TestService {
   getAllResultsByUser(userId: number): Observable<any> {
     return this.http.get<any>(`${this.baseUrl}/results/${userId}`);
   }
+
+  getSuggestedTags(): Observable<string[]> {
+    return this.http.get<string[]>(`${this.baseUrl}/tags/suggested`);
+  }
+
+  deactivateTest(testId: number): Observable<void> {
+    return this.http.patch<void>(`${this.baseUrl}/${testId}/deactivate`, {});
+  }
+
+  reactivateTest(testId: number): Observable<void> {
+    return this.http.patch<void>(`${this.baseUrl}/${testId}/reactivate`, {});
+  }
+
 
 }

@@ -28,6 +28,7 @@ export class AddPatientComponent {
   private toast = inject(ToastService);
   private patient : User | null = null;
   private patientId: number | null = null;
+  mode: string = '';
   private adminId = 1; // Assuming admin ID is 1 for this example, later we can get it from session storage or auth service
 
   ngOnInit() {
@@ -37,7 +38,9 @@ export class AddPatientComponent {
   private initRouteParams(): void {
     this.route.paramMap.subscribe((params) => {
       const idParam = params.get('patientId');
-
+      const modeParam = params.get('mode');
+      this.mode = modeParam || 'new';
+      console.log('Mode patient:', this.mode);
       if (idParam) {
         this.patientId = Number(idParam);
         this.sessionStorage.setPatientId(this.patientId);
@@ -67,8 +70,6 @@ export class AddPatientComponent {
     lastName: ['', [Validators.required]],
     birthDate: ['', [Validators.required]],
     email: ['', [Validators.required, Validators.email]],
-    phone: ['', [Validators.required, Validators.pattern(/^\+?[1-9]\d{1,14}$/)]],
-    assignedToAdmin: [this.adminId, [Validators.required]]
   });
 
   getError(field: string): string | null {
@@ -77,11 +78,13 @@ export class AddPatientComponent {
   }
 
   async savePatient() {
+    console.log('Saving patient with data:', this.patientForm.value);
     if(this.patient && this.patient.id) {
       if (this.patientForm.invalid) {
         this.patientForm.markAllAsTouched();
         return;
       }
+      console.log('Updating patient data:', this.patientForm.value);
       const patientData : User = this.patientForm.value as User;
       const updatedPatient = await firstValueFrom(this.patientService.updatePatient(patientData, this.patient.id));
       if(updatedPatient) {
@@ -94,14 +97,12 @@ export class AddPatientComponent {
         return;
       }
       const patientData : User = this.patientForm.value as User;
-      // here we have to assign an admin id to the patient data
-      patientData.assignedToAdmin = 1; // Assuming admin ID is 1 for this example
-      // but later we have to get the admin ID from the session storage or auth service
       console.log('Saving patient data:', patientData);
 
       const savedPatient = await firstValueFrom(this.patientService.createPatient(patientData));
       if(savedPatient) {
         this.toast.show({message: 'Patient created successfully', type: 'success'});
+        this.router.navigate(['/patient/edit', savedPatient.id]);
       }
     }
   }

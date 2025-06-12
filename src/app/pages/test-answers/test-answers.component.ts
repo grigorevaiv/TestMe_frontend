@@ -45,8 +45,6 @@ export class TestAnswersComponent {
 
 
 async ngOnInit(): Promise<void> {
-  this.testContextService.resetContext();
-
   const idParam = this.route.snapshot.paramMap.get('testId');
   const mode = this.route.snapshot.paramMap.get('mode') || 'new';
   const storedId = this.sessionStorage.getTestId();
@@ -59,13 +57,12 @@ async ngOnInit(): Promise<void> {
 
   this.testId = id;
   this.mode = mode;
+  this.sessionStorage.setTestId(id);
 
-  await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode));
+  await firstValueFrom(this.testContextService.ensureContext(this.testId, this.mode));
 
   this.testContextService.getTest().subscribe(test => {
-    if (test) {
-      this.testState = test.state ?? null;
-    }
+    this.testState = test?.state ?? null;
   });
 
   this.testContextService.getBlocks().subscribe(blocks => {
@@ -244,6 +241,7 @@ async saveTest(navigate: boolean = false): Promise<void> {
       const savedAnswers = await firstValueFrom(
         this.testService.saveAnswersBatch(newAnswers)
       );
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit', true));
       console.log('Saved new answers:', savedAnswers);
     }
 
@@ -251,6 +249,7 @@ async saveTest(navigate: boolean = false): Promise<void> {
       const updatedAnswers = await firstValueFrom(
         this.testService.updateAnswersBatch(existingAnswers)
       );
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit', true));
       console.log('Updated existing answers:', updatedAnswers);
     }
 
@@ -268,7 +267,7 @@ async saveTest(navigate: boolean = false): Promise<void> {
         this.testService.updateTestStateStep(this.testId, this.testState)
       );
       this.testState = updatedState;
-      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit'));
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit', true));
       this.router.navigate(['/test-answers/edit', this.testId]);
     }
 

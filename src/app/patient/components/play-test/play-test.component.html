@@ -1,139 +1,130 @@
+<app-header />
+
+@if (testStarted() && blockIds.length && !testCompleted()) {
+  <div class="w-full mb-4 space-y-2">
+    @for (blockId of blockIds; track blockId) {
+      <div class="relative bg-gray-200 h-6 rounded overflow-hidden">
+        <div class="bg-green-500 h-full transition-all duration-500"
+             [style.width.%]="getBlockProgress(blockId) * 100">
+        </div>
+
+        @if (block()?.id === blockId && block()?.hasTimeLimit && timeLeft() !== null) {
+          <div class="absolute right-4 top-1/2 -translate-y-1/2 text-black font-semibold text-base z-10 pointer-events-none">
+            Time left {{ timeLeft() }} sec
+          </div>
+        }
+      </div>
+
+      <p class="ml-2 text-sm text-gray-600">
+        Block {{ block().order }}: {{ block().name }}
+      </p>
+    }
+  </div>
+}
+
+<!-- Модалка: таймер истёк -->
 @if (blockTimeout()) {
   <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
     <div class="bg-white rounded-2xl p-6 shadow-xl max-w-sm text-center animate-fade-in">
-      <h2 class="text-xl font-semibold text-blue-900 mb-4">⏱ Время вышло</h2>
+      <h2 class="text-xl font-semibold text-blue-900 mb-4">Time is up</h2>
       <p class="text-gray-700 mb-6">
-        Переход к следующему блоку через 10 секунд...
+        Redirecting to next block in 10 seconds...
       </p>
       <button (click)="continueAfterTimeout()"
-              class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
-        Перейти сейчас
+              class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+        Go now
       </button>
     </div>
   </div>
 }
 
-<!-- ⏱ Инструкции перед началом теста -->
+<!-- Инструкции перед началом теста -->
 @if (!testStarted() && !testCompleted()) {
-  <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow border border-blue-100 mt-10 text-center">
-    <h1 class="text-2xl font-semibold text-blue-900 mb-4">{{ test.title }}</h1>
-    <p class="text-gray-700 mb-2">{{ test.description }}</p>
-    <p class="text-gray-600 mb-4">{{ test.instructions }}</p>
-    <button (click)="startTest()"
-            class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">
-      Начать тест
-    </button>
+  <div class="min-h-screen flex items-center justify-center px-4">
+    <div class="max-w-2xl w-full bg-white p-6 rounded-xl shadow border border-blue-100">
+      <h1 class="text-2xl font-semibold text-blue-900 mb-4 text-center">
+        {{ test.title }}
+      </h1>
+      <p class="text-gray-600 mb-6 text-center">
+        {{ test.instructions }}
+      </p>
+      <div class="flex justify-center">
+        <button (click)="startTest()"
+                class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 transition">
+          Start test
+        </button>
+      </div>
+    </div>
   </div>
 }
 
-<!-- 🧩 Начало блока -->
+
+<!-- Начало блока -->
 @if (testStarted() && block() && !blockStarted() && !testCompleted()) {
-  <div class="max-w-xl mx-auto bg-white p-6 rounded-xl shadow border border-blue-100 mt-10 text-center">
+  <div class="max-w-xl mx-auto bg-white p-6 rounded-xl shadow border border-blue-100 mt-24 text-center">
     <h1 class="text-xl font-semibold text-blue-900 mb-2">{{ block().name }}</h1>
     <p class="text-gray-700 mb-4">{{ block().instructions }}</p>
     <button (click)="startBlock()"
-            class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">
-      Начать блок
+            class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition">
+      Start block
     </button>
   </div>
 }
-@if (block() && block().hasTimeLimit && timeLeft() !== null) {
-  <div class="absolute top-0 right-0 bg-blue-100 text-blue-900 px-4 py-2 rounded-bl-xl shadow text-sm font-medium">
-    Времени на блок {{ timeLeft() }} сек
-  </div>
-}
 
-<!-- Отображение вопроса -->
+<!-- Вопросы -->
 @if (question() && blockStarted()) {
-    <div class="w-full max-w-3xl mx-auto mb-6">
-    <div class="flex gap-2">
-      @for (blockId of blockIds; track blockId) {
-        <div
-          class="flex-1 h-3 rounded-full relative overflow-hidden transition-all duration-300 border"
-          [ngClass]="{
-            'border-blue-600 shadow-md': block()?.id === blockId,
-            'border-transparent': block()?.id !== blockId
-          }"
-        >
-          <div
-            class="absolute inset-0 bg-sky-500 transition-all duration-500"
-            [style.width.%]="getBlockProgress(blockId) * 100"
-          ></div>
-        </div>
-      }
-    </div>
-    <div class="flex justify-between text-xs text-gray-500 mt-1">
-      @for (blockId of blockIds; track blockId) {
-        <div class="text-center flex-1">
-          Блок {{ blockId }}
-        </div>
-      }
-    </div>
-  </div>
-  <div class="max-w-3xl mx-auto bg-white p-6 rounded-xl shadow border border-blue-100 mt-10">
-    <h2 class="text-lg font-semibold text-blue-800 mb-4">{{ question().text }}</h2>
+  <div class="w-full mx-auto p-4 mt-10 text-center">
+    <h2 class="text-lg font-semibold text-blue-800 mb-4 break-words">
+      {{ question().text }}
+    </h2>
+
+    @if (question().imageUrl) {
+      <img [src]="question().imageUrl" alt="Question Image"
+           class="w-[400px] h-[300px] object-cover mb-4 rounded mx-auto">
+    }
 
     @if (question().questionAnswers?.length) {
-      <form class="space-y-3">
+      <form class="space-y-3 flex flex-col items-center">
         @for (answer of question().questionAnswers; track answer.id) {
-          <!-- multiple-choice -->
-          @if (block().questionsType === 'multiple-choice') {
-            <label class="flex items-center space-x-3 text-gray-700">
-              <input 
-                type="checkbox" 
-                id="{{ answer.id }}" 
-                name="answer_{{ answer.id }}"
-                value="{{ answer.id }}"
-                [checked]="selectedAnswers.includes(answer.id.toString())"
-                (change)="updateSelectedAnswers($event)" 
-                class="accent-blue-600"
-              />
-              <span>{{ answer.text }}</span>
-            </label>
-          }
-
-          <!-- single-choice -->
-          @if (block().questionsType === 'single-choice') {
-            <label class="flex items-center space-x-3 text-gray-700">
-              <input 
-                type="radio" 
-                id="{{ answer.id }}" 
-                name="question_{{ question().id }}"
-                value="{{ answer.id }}"
-                [checked]="selectedAnswers.includes(answer.id.toString())"
-                (change)="updateSelectedAnswers($event)" 
-                class="accent-blue-600"
-              />
-              <span>{{ answer.text }}</span>
-            </label>
-          }
+          <label class="flex items-start space-x-3 text-gray-700 break-words max-w-full">
+            <input 
+              [type]="block().questionsType === 'single-choice' ? 'radio' : 'checkbox'"
+              [name]="block().questionsType === 'single-choice' ? 'question_' + question().id : 'answer_' + answer.id"
+              [value]="answer.id"
+              [checked]="selectedAnswers.includes(answer.id.toString())"
+              (change)="updateSelectedAnswers($event)" 
+              class="accent-blue-600 mt-1"
+            />
+            <span class="break-words text-left">{{ answer.text }}</span>
+          </label>
         }
       </form>
     } @else {
-      <p class="text-red-500 mt-4">Ответы не найдены 🤷‍♀️</p>
+      <p class="text-red-500 mt-4">Answers not found</p>
     }
 
-    <div class="flex justify-between mt-6">
-      <button (click)="prev()" class="text-blue-600 hover:underline">Назад</button>
-      <button (click)="next()" class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700">
-        Вперёд
-      </button>
-    </div>
+<div class="flex justify-center gap-6 mt-6">
+  <button (click)="prev()"
+          class="text-blue-600 border border-blue-600 px-4 py-2 rounded hover:bg-blue-600 hover:text-white">
+    ← Previous
+  </button>
+  <button (click)="next()"
+          class="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700">
+    Next →
+  </button>
+</div>
   </div>
 }
 
-<!-- ✅ Завершение теста -->
-@if(testCompleted()) {
-  <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow border border-blue-100 mt-10 text-center">
-    <p class="text-xl text-blue-900 font-semibold mb-4">Тест завершен 🎉</p>
-    <div class="space-x-4 mb-6">
-      <button (click)="calculateResults()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
-        Получить результат
-      </button>
-      <button (click)="saveResults()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-        Сохранить данные
-      </button>
-    </div>
-    <canvas id="testResultsChart" class="mx-auto"></canvas>
+
+
+<!-- Завершение теста -->
+@if (testCompleted()) {
+  <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow border border-blue-100 mt-24 text-center">
+    <p class="text-xl font-semibold mb-4">
+      Thank you, your results are saved. Please contact your doctor for more information.
+    </p>
   </div>
 }
+
+<app-footer />

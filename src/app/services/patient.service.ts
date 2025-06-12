@@ -38,7 +38,16 @@ export class PatientService {
     return this.http.post(`${this.baseUrl}/invitations/verify`, { token, email });
   }
 
+  checkTokenStatus(token: string): Observable<{ used: boolean }> {
+    return this.http.get<{ used: boolean }>(`${this.baseUrl}/token-status/${token}`);
+  }
 
+  deactivatePatient(patientId: number): Observable<void> {
+    return this.http.patch<void>(`${this.baseUrl}/${patientId}/deactivate`, {});
+  }
 
+  reactivatePatient(patientId: number): Observable<void> {
+    return this.http.patch<void>(`${this.baseUrl}/${patientId}/reactivate`, {});
+  }
 
 }

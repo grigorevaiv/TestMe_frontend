@@ -13,17 +13,29 @@
       </button>
     </div>
 
+    <app-search-filter
+      [items]="patients"
+      [filterKeys]="['firstName', 'lastName', 'email', 'isActive']"
+      (filtered)="filteredPatients = $event"
+      [placeholder]="placeholder"
+    />
     <!-- Список пациентов -->
     <div class="flex flex-col gap-5">
-      @for(patient of patients; track patient.id) {
+      @for(patient of filteredPatients; track patient.id) {
         <app-list-item [item]="patient" type="patient"
           (edit)="onEditPatient(patient)"
           (delete)="onDeletePatient(patient)"
+          (reactivate)="onReactivatePatient(patient)"
           (view)="onViewResults(patient)"
         ></app-list-item>
       }
     </div>
-
-
   </div>
 </div>
+
+<app-confirm-dialog
+  [message]="confirmMessage"
+  [visible]="confirmVisible"
+  (confirm)="onConfirmDialog()"
+  (cancel)="onCancelDialog()"
+></app-confirm-dialog>

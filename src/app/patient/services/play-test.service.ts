@@ -41,7 +41,7 @@ export class PlayTestService {
   constructor() {
     const session = this.sessionStorage.getTestSession();
     if (!session) {
-      console.error('❌ Нет данных о сессии теста (перезагрузка страницы)');
+      console.error('Нет данных о сессии теста (перезагрузка страницы)');
       return;
     }
 
@@ -81,7 +81,7 @@ export class PlayTestService {
       this.loadTestData();
       this.initialized = true;
     } catch (err) {
-      console.error('❌ Ошибка при инициализации данных теста', err);
+      console.error('Ошибка при инициализации данных теста', err);
     }
 }
 
@@ -108,7 +108,6 @@ async loadTestData() {
       };
     });
 
-    // Подготовка Map: блок => вопросы
     this.questionsByBlock.clear();
     for (const block of this.blocks) {
       const questionsInBlock = this.questionsWithAnswers.filter(
@@ -121,10 +120,6 @@ async loadTestData() {
 
       this.questionsByBlock.set(block.id!, randomizedQuestions);
     }
-
-    console.log('📦 Questions by block:', this.questionsByBlock);
-
-    // Установка первого вопроса и блока
     const firstBlock = this.blocks[this.currentBlockIndex];
     const firstBlockId = firstBlock?.id;
     const questionsInFirstBlock = this.questionsByBlock.get(firstBlockId!) || [];
@@ -133,7 +128,7 @@ async loadTestData() {
     this.currentQuestion.set(questionsInFirstBlock[this.currentQuestionIndex]);
 
   } catch (error) {
-    console.error('❌ Failed to load test data', error);
+    console.error('Failed to load test data', error);
   }
 }
 
@@ -154,12 +149,13 @@ async loadTestData() {
     }
     else {
       console.log('No more blocks available');
+      this.stopTimer();
       this.testCompleted.set(true);
     }
   }
 
   startTest() {
-    console.log('СТАРТ ТЕСТА');
+    this.stopTimer();
     this.testStarted.set(true);
     this.currentBlock.set(this.blocks[this.currentBlockIndex]);
     this.startBlock();
@@ -196,7 +192,7 @@ async loadTestData() {
   timeLeft = signal<number | null>(null);
 
   startBlock() {
-    clearInterval(this.intervalId);
+    this.stopTimer();
     const currentBlock = this.currentBlock();
     console.log('СТАРТ БЛОКА', currentBlock);
     if (currentBlock?.hasTimeLimit) {
@@ -208,14 +204,14 @@ async loadTestData() {
   }
 
 private startTimer() {
+  this.stopTimer();
   this.intervalId = setInterval(() => {
     const current = this.timeLeft();
     if (current !== null && current > 0) {
       this.timeLeft.set(current - 1);
       console.log(`Осталось ${current - 1} секунд`);
     } else {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
+      this.stopTimer();
       this.finishBlock();
     }
   }, 1000);
@@ -226,11 +222,7 @@ private intervalId: any = null;
 
 private finishBlock() {
   this.blockStarted.set(false);
-
-  if (this.intervalId !== null) {
-    clearInterval(this.intervalId);
-    this.intervalId = null;
-  }
+  this.stopTimer(); 
 
   this.timeLeft.set(null);
   this.blockTimeout.set(true); 
@@ -258,9 +250,20 @@ continueAfterTimeout() {
 
     this.startBlock();
   } else {
+    this.stopTimer();
     this.testCompleted.set(true);
   }
 }
+
+private stopTimer() {
+  if (this.intervalId !== null) {
+    clearInterval(this.intervalId);
+    this.intervalId = null;
+    this.timeLeft.set(null);
+    console.log('Timer stopped');
+  }
+}
+
 
 
 }

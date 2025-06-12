@@ -27,7 +27,7 @@ export class TagChipsComponent {
       }
 
     if (!this.tags.includes(value)) {
-      this.tags = [...this.tags, value]; // новая ссылка
+      this.tags = [...this.tags, value];
       this.tagsChange.emit(this.tags);
     }
 
@@ -35,6 +35,17 @@ export class TagChipsComponent {
       event.preventDefault?.();
     }
   }
+
+addSugTag(tag: string) {
+  const value = tag.trim().toLowerCase();
+  if (!this.tags.includes(value)) {
+    this.tags = [...this.tags, value];
+    this.tagsChange.emit(this.tags);
+  } else {
+    this.toast.show({ message: 'This tag is already added', type: 'info' });
+  }
+}
+
 
   removeTag(tag: string) {
   this.tags = this.tags.filter(t => t !== tag);

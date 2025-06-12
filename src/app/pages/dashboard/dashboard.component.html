@@ -1,6 +1,5 @@
 <div class="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
   <div class="w-full lg:w-[70%] mx-auto bg-white border border-gray-200 rounded-xl shadow-sm p-6 space-y-6">
-
     <!-- Заголовок и кнопка -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <h1 class="text-lg sm:text-xl md:text-2xl font-header font-semibold text-gray-800">Tests</h1>
@@ -12,13 +11,21 @@
         + New test 
       </button>
     </div>
-
+    <app-search-filter
+      [items]="tests"
+      [filterKeys]="['title', 'state.state', 'tags']"
+      (filtered)="filteredTests = $event"
+      [triggerSearch]="selectedTag"
+      [placeholder]="placeholder"
+    />
     <!-- Список -->
     <div class="flex flex-col gap-5">
-      @for(test of tests; track test.id) {
+      @for(test of filteredTests; track test.id) {
         <app-list-item [item]="test" type="test"
           (edit)="onEditTest(test)"
           (delete)="onDeleteTest(test)"
+          (reactivate)="onReactivateTest(test)"
+          (tagClick)="onTagSelected($event)"
         ></app-list-item>
       }
     </div>
@@ -26,3 +33,9 @@
 
   </div>
 </div>
+<app-confirm-dialog
+  [message]="confirmMessage"
+  [visible]="confirmVisible"
+  (confirm)="onConfirmDialog()"
+  (cancel)="onCancelDialog()"
+></app-confirm-dialog>

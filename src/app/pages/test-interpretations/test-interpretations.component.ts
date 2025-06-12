@@ -34,9 +34,7 @@ export class TestInterpretationsComponent {
   mode: string = '';
   testContextService = inject(TestContextService);
 
-  async ngOnInit(): Promise<void> {
-  this.testContextService.resetContext();
-
+async ngOnInit(): Promise<void> {
   const idParam = this.route.snapshot.paramMap.get('testId');
   const mode = this.route.snapshot.paramMap.get('mode') || 'new';
   const storedId = this.sessionStorage.getTestId();
@@ -51,7 +49,7 @@ export class TestInterpretationsComponent {
   this.mode = mode;
   this.sessionStorage.setTestId(id);
 
-  await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode));
+  await firstValueFrom(this.testContextService.ensureContext(this.testId, this.mode));
 
   this.testContextService.getTest().subscribe(test => {
     this.testState = test?.state ?? null;
@@ -76,6 +74,7 @@ export class TestInterpretationsComponent {
     }
   });
 }
+
 
 
 
@@ -186,7 +185,7 @@ cleanExtraInterpretations() {
           );
           console.log('Test state updated successfully:', updatedState);
 
-          await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit'));
+          await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit', true));
           this.router.navigate(['/test-interpretations/edit', this.testId]);
         }
       } catch (error) {
@@ -194,7 +193,7 @@ cleanExtraInterpretations() {
         this.toast?.show?.({ message: 'Failed to save interpretations', type: 'error' });
       }
     } else {
-      console.warn('⚠️ Interpretations already exist, skipping save');
+      console.warn('Interpretations already exist, skipping save');
     }
   }
 

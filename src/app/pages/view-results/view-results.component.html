@@ -2,8 +2,11 @@
   <h3 class="text-xl font-semibold mb-4">Результаты</h3>
 
   <div *ngFor="let result of results" class="mb-4 p-4 border rounded shadow">
+    <p>{{result | json }}</p>
     <p><strong>Результат ID:</strong> {{ result.testResultId }}</p>
     <p><strong>Тест ID:</strong> {{ result.testId }}</p>
+    <p><strong>Тест:</strong> {{ result.testTitle }}</p>
+    <p><strong>Дата:</strong> {{ result.createdAt | date }}</p>
 
     <ul class="mt-2">
       <li *ngFor="let r of result.results">
@@ -14,7 +17,7 @@
 </div>
 
 <ng-template #noResults>
-  <p class="text-gray-600">Пока нет результатов</p>
+  <p class="text-gray-600">No results yet</p>
 </ng-template>
 
 
