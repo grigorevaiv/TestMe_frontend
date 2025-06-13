@@ -27,6 +27,7 @@ export class ViewResultsComponent {
   patientId: number | null = null;
   patientEmail: string | null = null;
   tests: Test[] = [];
+  patientFullName: string | null = null;
 
   constructor() {
     effect(() => {
@@ -49,6 +50,7 @@ initializeRouteParams(): void {
       this.patientService.getPatientById(this.patientId).subscribe({
         next: (patient) => {
           this.patientEmail = patient.email;
+          this.patientFullName = `${patient.firstName} ${patient.lastName}`;
           console.log('Patient email:', this.patientEmail);
         },
         error: (err) => {

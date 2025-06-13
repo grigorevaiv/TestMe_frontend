@@ -1,52 +1,74 @@
-<div *ngIf="results.length > 0; else noResults">
-  <h3 class="text-xl font-semibold mb-4">Результаты</h3>
+<div *ngIf="results.length > 0; else noResults" class="space-y-4">
+  <h3 class="text-xl font-semibold mb-4">Results of {{patientFullName}}</h3>
 
-  <div *ngFor="let result of results" class="mb-4 p-4 border rounded shadow">
-    <p>{{result | json }}</p>
-    <p><strong>Результат ID:</strong> {{ result.testResultId }}</p>
-    <p><strong>Тест ID:</strong> {{ result.testId }}</p>
-    <p><strong>Тест:</strong> {{ result.testTitle }}</p>
-    <p><strong>Дата:</strong> {{ result.createdAt | date }}</p>
+  <div
+    *ngFor="let result of results"
+    class="bg-sky-50 hover:bg-sky-100 border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition flex flex-col gap-2"
+  >
+    <div class="flex flex-col sm:flex-row justify-between gap-4">
+      <div>
+        <h4 class="text-lg font-semibold text-gray-800">{{ result.testTitle }}</h4>
+        <p>{{result | json}}</p>
+        <p class="text-sm text-gray-600 mt-1">Результат ID: <strong>{{ result.testResultId }}</strong></p>
+        <p class="text-sm text-gray-600">Тест ID: <strong>{{ result.testId }}</strong></p>
+        <p class="text-sm text-gray-600">Дата: <strong>{{ result.createdAt | date:'mediumDate' }}</strong></p>
+      </div>
+    </div>
 
-    <ul class="mt-2">
-      <li *ngFor="let r of result.results">
-        <strong>{{ r.scaleName }}</strong> — {{ r.normalized }} ({{ r.interpretation }})
-      </li>
-    </ul>
+    <div>
+      <p class="text-sm font-medium text-gray-700 mt-2 mb-1">Оценки по шкалам:</p>
+      <ul class="list-disc list-inside space-y-1 text-sm text-gray-800">
+        <li *ngFor="let r of result.results">
+          <strong>{{ r.scaleName }}:</strong> {{ r.normalized }} ({{ r.interpretation }})
+        </li>
+      </ul>
+    </div>
   </div>
 </div>
 
 <ng-template #noResults>
-  <p class="text-gray-600">No results yet</p>
+  <p class="text-gray-600 italic">No results yet.</p>
 </ng-template>
 
-
-<!-- Кнопка -->
-<button (click)="openModal()" class="px-4 py-2 bg-blue-500 text-white rounded">
-  + Assign test
+<!-- Кнопка открытия модалки -->
+<button
+  (click)="openModal()"
+  class="mt-6 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+>
+  + Назначить тест
 </button>
 
 <!-- Модалка -->
-<div *ngIf="isModalOpen" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-  <div class="bg-white p-6 rounded shadow-lg w-full max-w-md">
-    <h2 class="text-xl font-semibold mb-4">Assign Tests</h2>
+<div
+  *ngIf="isModalOpen"
+  class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
+>
+  <div class="bg-white p-6 rounded-xl shadow-lg w-full max-w-md relative">
+    <h2 class="text-xl font-semibold mb-4">Назначить тесты</h2>
 
-    <div *ngFor="let test of tests">
+    <div *ngFor="let test of tests" class="mb-2">
       <label class="flex items-center space-x-2">
         <input
           type="checkbox"
+          class="accent-blue-500"
           [checked]="selectedTestIds.includes(test.id!)"
           (change)="onCheckboxChange($event, test.id!)"
         />
-        <span>{{ test.title }}</span>
+        <span class="text-sm">{{ test.title }}</span>
       </label>
     </div>
 
     <div class="flex justify-end mt-6 space-x-2">
-      <button (click)="closeModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded">
+      <button
+        (click)="closeModal()"
+        class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 transition"
+      >
         Cancel
       </button>
-      <button (click)="saveAssignedTests()" class="px-4 py-2 bg-blue-600 text-white rounded">
+      <button
+        (click)="saveAssignedTests()"
+        class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+      >
         Save
       </button>
     </div>
