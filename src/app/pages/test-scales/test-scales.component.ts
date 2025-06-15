@@ -16,6 +16,7 @@ import { ConfirmDialogComponent } from '../../components/confirm-dialog/confirm-
 import { SessionStorageService } from '../../services/session-storage.service';
 import { TestContextService } from '../../services/test-context.service';
 import { NgIf } from '@angular/common';
+import { StepRedirectService } from '../../services/step-redirect.service';
 
 
 @Component({
@@ -35,6 +36,7 @@ export class TestScalesComponent {
   resourceService = inject(ResourceService);
   toast = inject(ToastService);
   private testContextService = inject(TestContextService);
+  stepRedirectService = inject(StepRedirectService);
 
   testId: number | null = null;
   mode: string = '';
@@ -61,6 +63,16 @@ export class TestScalesComponent {
     const storedId = this.sessionStorage.getTestId();
     const id = idParam ? Number(idParam) : storedId;
 
+    if (id) {
+      const redirected = await this.stepRedirectService.redirectIfStepAlreadyCompleted(
+        mode,
+        id,
+        3,
+        (id) => ['/test-scales/edit', id]
+      );
+      if (redirected) return;
+    }
+
     if (!id) {
       console.warn('[TestScalesComponent] No test ID found');
       return;
@@ -70,7 +82,7 @@ export class TestScalesComponent {
     this.mode = mode;
     this.sessionStorage.setTestId(id);
 
-    await firstValueFrom(this.testContextService.ensureContext(this.testId, this.mode));
+    await firstValueFrom(this.testContextService.ensureContext(this.testId, this.mode, 3));
 
     this.testContextService.getTest().subscribe(test => {
       if (test) {
@@ -198,7 +210,7 @@ export class TestScalesComponent {
     } else {
       await firstValueFrom(this.testService.updateScale(updated.id!, updated));
       this.toast.show({ message: 'Scale updated successfully!', type: 'success' });
-      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', true));
+      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', 3, true));
     }
 
     this.cancelEdit();
@@ -214,12 +226,12 @@ export class TestScalesComponent {
 
     if (!this.selectedScale.id) {
       this.pendingScales = this.pendingScales.filter(s => s !== this.selectedScale);
-      this.toast.show({ message: 'Pending scale removed', type: 'info' });
+      this.toast.show({ message: 'Scale removed', type: 'info' });
     } else if (this.testId) {
       try {
         await firstValueFrom(this.testService.deleteScale(this.selectedScale.id));
-        this.toast.show({ message: 'Scale deleted successfully!', type: 'success' });
-        await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', true));
+        this.toast.show({ message: 'Scale deleted successfully', type: 'success' });
+        await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', 3, true));
       }
       catch (error) {
         console.error('Error deleting scale:', error);
@@ -245,63 +257,109 @@ export class TestScalesComponent {
     return [...this.scales, ...this.pendingScales];
   }
 
-  async saveTest(navigate: boolean = false): Promise<void> {
-    if (this.isEditing) {
-      this.toast.show({ message: 'Finish editing the scale before saving the test.', type: 'warning' });
-      return;
-    }
+  isSaved = false;
+  confirmDialogVisible = false;
+  confirmDialogMessage = 'Are you sure you want to proceed? All unsaved changes will be lost';
+  pendingStep: number | null = null;
 
-    if (this.pendingScales.length === 0 && this.scales.length === 0) {
-      this.toast.show({ message: 'You must add at least one scale to save the test.', type: 'warning' });
-      return;
-    }
-
-    if (!this.testState || !this.testId) return;
-
-    if (this.pendingScales.length > 0) {
-      await firstValueFrom(this.testService.addScalesBatch(this.testId, this.pendingScales));
-      this.toast.show({ message: 'All scales saved!', type: 'success' });
-      this.pendingScales = [];
-      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', true));
-    }
-
-    if (this.testState.currentStep < 3) {
-      this.testState.currentStep = 3;
-      await firstValueFrom(this.testService.updateTestStateStep(this.testId, this.testState));
-      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', true));
-      this.router.navigate(['/test-scales/edit', this.testId]);
-      return;
-    }
-
-    this.resourceService.triggerRefresh();
-
-    if (navigate) this.handleNavigation(this.testState);
+async saveTest(): Promise<void> {
+  if (this.isEditing) {
+    this.toast.show({ message: 'Finish editing the scale before saving the test', type: 'warning' });
+    return;
   }
 
-  private handleNavigation(testState: State) {
-    const step = testState.currentStep;
-    if (step === 3) {
+  if (this.pendingScales.length === 0 && this.scales.length === 0) {
+    this.toast.show({ message: 'You must add at least one scale to save the test', type: 'warning' });
+    return;
+  }
+
+  if (!this.testState || !this.testId) return;
+
+  if (this.pendingScales.length > 0) {
+    await firstValueFrom(this.testService.addScalesBatch(this.testId, this.pendingScales));
+    this.toast.show({ message: 'All scales saved', type: 'success' });
+    this.pendingScales = [];
+    await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', 3, true));
+  }
+
+  if (this.testState.currentStep < 3) {
+    this.testState.currentStep = 3;
+    await firstValueFrom(this.testService.updateTestStateStep(this.testId, this.testState));
+    await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', 3, true));
+    this.router.navigate(['/test-scales/edit', this.testId]);
+    return;
+  }
+
+  this.resourceService.triggerRefresh();
+}
+
+onStepSelected(step: number): void {
+  const id = this.testId || this.sessionStorage.getTestId(); 
+  if (!id || !stepRoutes[step]) return;
+
+  const editing = this.isEditing;
+  const hasUnsaved = this.pendingScales.length > 0;
+
+  if (!editing && !hasUnsaved) {
+    this.navigateToStep(step);
+    return;
+  }
+
+  this.pendingStep = step;
+  this.confirmDialogVisible = true;
+}
+
+navigateToStep(step: number): void {
+  const id = this.testId || this.sessionStorage.getTestId();
+  if (!id || !stepRoutes[step]) return;
+  this.router.navigate(stepRoutes[step](id));
+
+}
+
+onConfirmNavigation(): void {
+  if (this.pendingStep !== null) {
+    this.navigateToStep(this.pendingStep);
+  }
+  this.resetNavigationState();
+}
+
+resetNavigationState(): void {
+  this.confirmDialogVisible = false;
+  this.pendingStep = null;
+}
+
+onCancelNavigation(): void {
+  this.resetNavigationState();
+}
+
+navigate(): void {
+  const step = this.testState?.currentStep ?? 3;
+  const isClean = this.pendingScales.length === 0;
+
+  if (!this.isEditing && isClean) {
+    this.toast.show({ message: 'Going to next step...', type: 'info' });
+
+    setTimeout(() => {
+      const route = step === 3
+        ? ['/test-questions/new']
+        : ['/test-questions/edit', this.testId];
+
+      this.router.navigate(route);
+    }, 700);
+  } else {
+    if (this.mode === 'new') {
       this.toast.show({
-        message: 'Going to next step...',
-        type: 'info',
+        message: 'Please save the test before proceeding',
+        type: 'warning',
       });
-      setTimeout(() => {
-        this.router.navigate(['/test-questions/new']);
-      }, 700);
-    } else if (step > 3) {
-      if (!this.testId) {
-        console.error('Cannot navigate to edit: testId is missing');
-        return;
-      }
-      this.router.navigate(['/test-questions/edit/', this.testId]);
+    } else {
+      this.pendingStep = step + 1;
+      this.confirmDialogVisible = true;
     }
   }
+}
 
-  onStepSelected(step: number) {
-    const id = this.testId || this.sessionStorage.getTestId(); 
-    if (!id || !stepRoutes[step]) return;
-    this.router.navigate(stepRoutes[step](id));
-  }
+
 }
 
 

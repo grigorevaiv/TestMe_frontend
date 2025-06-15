@@ -10,7 +10,6 @@
   ></app-progress-bar>
   <div class="max-w-3xl mx-auto">
     <h1 class="text-xl sm:text-2xl font-semibold text-gray-800 mb-4">Create a new test</h1>
-
     <form [formGroup]="testForm" class="space-y-6">
 
       <!-- Title -->
@@ -87,10 +86,16 @@
         </button>
         <button
           class="w-full sm:w-auto bg-sky-700 hover:bg-sky-800 text-white text-sm sm:text-base md:text-lg font-medium px-6 py-2 rounded transition disabled:bg-gray-400 disabled:cursor-not-allowed"
-          (click)="saveTest(true)">
-          Save and proceed →
+          (click)="navigate()">
+          Next →
         </button>
       </div>
     </form>
   </div>
 </div>
+  <app-confirm-dialog
+    [visible]="confirmDialogVisible"
+    [message]="confirmDialogMessage"
+    (confirm)="onConfirmNavigation()"
+    (cancel)="onCancelNavigation()"
+    ></app-confirm-dialog>

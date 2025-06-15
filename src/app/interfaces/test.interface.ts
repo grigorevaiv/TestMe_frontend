@@ -62,6 +62,7 @@ export interface Weight {
     answerId: number;
     scaleId: number;
     value: number;
+    answer?: Answer;
 }
 
 export interface Norm {
@@ -86,6 +87,7 @@ export interface Tag {
 
 export interface QuestionWithTags extends Question {
   tagsIds: number[];
+  testTitle?: string;
 }
 
 export interface User {

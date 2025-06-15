@@ -1,10 +1,30 @@
-import { Component, effect, ElementRef, inject, QueryList, ViewChildren } from '@angular/core';
-import { FormBuilder, FormControl, FormGroup, NgModel, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  Component,
+  effect,
+  ElementRef,
+  inject,
+  QueryList,
+  ViewChildren,
+} from '@angular/core';
+import {
+  FormBuilder,
+  FormControl,
+  FormGroup,
+  NgModel,
+  ReactiveFormsModule,
+  Validators,
+} from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 //import { CacheService } from '../../services/cache.service';
 import { TestService } from '../../services/test.service';
 import { ResourceService } from '../../services/resource.service';
-import { Answer, Block, Question, Scale, Weight } from '../../interfaces/test.interface';
+import {
+  Answer,
+  Block,
+  Question,
+  Scale,
+  Weight,
+} from '../../interfaces/test.interface';
 import { firstValueFrom, take } from 'rxjs';
 import { NgClass, NgFor, NgIf } from '@angular/common';
 import { ValidationService } from '../../services/validation.service';
@@ -13,12 +33,21 @@ import { ProgressBarComponent } from '../../components/progress-bar/progress-bar
 import { stepRoutes } from '../../constants/step-routes';
 import { SessionStorageService } from '../../services/session-storage.service';
 import { TestContextService } from '../../services/test-context.service';
+import { ConfirmDialogComponent } from '../../components/confirm-dialog/confirm-dialog.component';
+import { StepRedirectService } from '../../services/step-redirect.service';
 
 @Component({
   selector: 'app-test-weights',
-  imports: [ReactiveFormsModule, NgIf, NgClass, NgFor, ProgressBarComponent],
+  imports: [
+    ReactiveFormsModule,
+    NgIf,
+    NgClass,
+    NgFor,
+    ProgressBarComponent,
+    ConfirmDialogComponent,
+  ],
   templateUrl: './test-weights.component.html',
-  styleUrl: './test-weights.component.css'
+  styleUrl: './test-weights.component.css',
 })
 export class TestWeightsComponent {
   router = inject(Router);
@@ -32,7 +61,8 @@ export class TestWeightsComponent {
   toast = inject(ToastService);
   step = 6;
   testContextService = inject(TestContextService);
-  
+  stepRedirectService = inject(StepRedirectService);
+
   blocks: Block[] = [];
   scales: Scale[] = [];
   questions: Question[] = [];
@@ -53,52 +83,64 @@ export class TestWeightsComponent {
     };
   } = {};
 
+  async ngOnInit(): Promise<void> {
+    const idParam = this.route.snapshot.paramMap.get('testId');
+    const mode = this.route.snapshot.paramMap.get('mode') || 'new';
+    const storedId = this.sessionStorage.getTestId();
+    const id = idParam ? Number(idParam) : storedId;
 
-async ngOnInit(): Promise<void> {
-  const idParam = this.route.snapshot.paramMap.get('testId');
-  const mode = this.route.snapshot.paramMap.get('mode') || 'new';
-  const storedId = this.sessionStorage.getTestId();
-  const id = idParam ? Number(idParam) : storedId;
+    if (id) {
+      const redirected =
+        await this.stepRedirectService.redirectIfStepAlreadyCompleted(
+          mode,
+          id,
+          6,
+          (id) => ['/test-weights/edit', id]
+        );
+      if (redirected) return;
+    }
 
-  if (!id) {
-    console.warn('[TestWeightsComponent] No test ID found');
-    return;
+    if (!id) {
+      console.warn('[TestWeightsComponent] No test ID found');
+      return;
+    }
+
+    this.testId = id;
+    this.mode = mode;
+    this.sessionStorage.setTestId(id);
+
+    await firstValueFrom(
+      this.testContextService.ensureContext(this.testId, this.mode, 6)
+    );
+
+    this.testContextService.getTest().subscribe((test) => {
+      this.testState = test?.state ?? null;
+    });
+
+    this.testContextService.getBlocks().subscribe((blocks) => {
+      this.blocks = blocks || [];
+    });
+
+    this.testContextService.getScales().subscribe((scales) => {
+      this.scales = scales || [];
+    });
+
+    this.testContextService.getQuestions().subscribe((questions) => {
+      this.questions = questions || [];
+    });
+
+    this.testContextService.getAnswers().subscribe((answers) => {
+      this.answers = answers || [];
+      this.initializeWeightsForms();
+    });
+
+    this.testContextService.getWeights().subscribe((weights) => {
+      this.weights = weights || [];
+      this.patchWeightsToForm(this.weights);
+    });
+
+    window.addEventListener('beforeunload', this.beforeUnloadHandler);
   }
-
-  this.testId = id;
-  this.mode = mode;
-  this.sessionStorage.setTestId(id);
-
-  await firstValueFrom(this.testContextService.ensureContext(this.testId, this.mode));
-
-  this.testContextService.getTest().subscribe(test => {
-    this.testState = test?.state ?? null;
-  });
-
-  this.testContextService.getBlocks().subscribe(blocks => {
-    this.blocks = blocks || [];
-  });
-
-  this.testContextService.getScales().subscribe(scales => {
-    this.scales = scales || [];
-  });
-
-  this.testContextService.getQuestions().subscribe(questions => {
-    this.questions = questions || [];
-  });
-
-  this.testContextService.getAnswers().subscribe(answers => {
-    this.answers = answers || [];
-    this.initializeWeightsForms();  // инициализация после загрузки ответов
-  });
-
-  this.testContextService.getWeights().subscribe(weights => {
-    this.weights = weights || [];
-    this.patchWeightsToForm(this.weights);  // патч после загрузки весов
-  });
-}
-
-
 
   get completedStepsArray(): number[] {
     const currentStep = this.testState?.currentStep ?? 0;
@@ -106,9 +148,8 @@ async ngOnInit(): Promise<void> {
   }
 
   questionGroups: {
-    [blockId: number]: { [questionId: number]: FormGroup }
+    [blockId: number]: { [questionId: number]: FormGroup };
   } = {};
-
 
   initializeWeightsForms(): void {
     this.weightsPerScale = {};
@@ -119,7 +160,7 @@ async ngOnInit(): Promise<void> {
       this.weightsPerScale[blockId] = {};
       this.questionGroups[blockId] = {};
 
-      const blockScales = this.scales.filter(s => s.blockId === blockId);
+      const blockScales = this.scales.filter((s) => s.blockId === blockId);
       const blockQuestions = this.getQuestionsByBlock(blockId);
 
       for (const scale of blockScales) {
@@ -127,7 +168,9 @@ async ngOnInit(): Promise<void> {
         this.weightsPerScale[blockId][scaleId] = {};
 
         for (const question of blockQuestions) {
-          for (const answer of this.answers.filter(a => a.questionId === question.id)) {
+          for (const answer of this.answers.filter(
+            (a) => a.questionId === question.id
+          )) {
             const answerId = answer.id!;
             this.weightsPerScale[blockId][scaleId][answerId] = this.fb.group<{
               value: FormControl<number | null>;
@@ -136,11 +179,9 @@ async ngOnInit(): Promise<void> {
               value: new FormControl<number | null>(0),
               id: new FormControl<number | null>(null),
             });
-
           }
         }
       }
-
     }
   }
 
@@ -148,646 +189,823 @@ async ngOnInit(): Promise<void> {
     return block.questionsType;
   }
 
-patchWeightsToForm(weights: any[]): void {
-  for (const rawWeight of weights) {
-    // Поддержка как snake_case, так и camelCase
-    const scaleId = +(rawWeight.scaleId ?? rawWeight.scale_id);
-    const answerId = +(rawWeight.answerId ?? rawWeight.answer_id);
-    const value = rawWeight.value;
-    const id = rawWeight.id;
+  patchWeightsToForm(weights: any[]): void {
+    for (const rawWeight of weights) {
+      const scaleId = +(rawWeight.scaleId ?? rawWeight.scale_id);
+      const answerId = +(rawWeight.answerId ?? rawWeight.answer_id);
+      const value = rawWeight.value;
+      const id = rawWeight.id;
 
-    let patched = false;
+      let patched = false;
 
-    for (const blockId of Object.keys(this.weightsPerScale)) {
-      const answerGroups = this.weightsPerScale[+blockId]?.[scaleId];
+      for (const blockId of Object.keys(this.weightsPerScale)) {
+        const answerGroups = this.weightsPerScale[+blockId]?.[scaleId];
 
-      if (answerGroups?.[answerId]) {
-        answerGroups[answerId].patchValue({
-          value: value,
-          id: id ?? null
-        });
-        patched = true;
-        break; 
+        if (answerGroups?.[answerId]) {
+          answerGroups[answerId].patchValue({
+            value: value,
+            id: id ?? null,
+          });
+          patched = true;
+          break;
+        }
+      }
+
+      if (!patched) {
+        console.warn(
+          `Could not patch weight: scaleId=${scaleId}, answerId=${answerId}, value=${value}`
+        );
       }
     }
-
-    if (!patched) {
-      console.warn(`⚠️ Could not patch weight: scaleId=${scaleId}, answerId=${answerId}, value=${value}`);
-    }
   }
-}
 
-
-    onBipolarCheck(blockId: number, scaleId: number, answerId: number, value: -1 | 1): void {
+  onBipolarCheck(
+    blockId: number,
+    scaleId: number,
+    answerId: number,
+    value: -1 | 1
+  ): void {
     const group = this.getWeightControl(blockId, scaleId, answerId);
     const current = group.get('value')?.value;
     group.get('value')?.setValue(current === value ? 0 : value);
     group.markAsTouched();
   }
 
-onExclusiveCheck(
-  blockId: number,
-  scaleId: number,
-  questionId: number,
-  selectedAnswerId: number,
-  checked: boolean,
-  value: -1 | 1
-): void {
-  const answersForQuestion = this.answers.filter(a => a.questionId === questionId);
-  const block = this.blocks.find(b => b.id === blockId);
-  const scale = this.getScalesForBlock(blockId).find(s => s.id === scaleId);
-  if (!block || !scale) return;
+  onExclusiveCheck(
+    blockId: number,
+    scaleId: number,
+    questionId: number,
+    selectedAnswerId: number,
+    checked: boolean,
+    value: -1 | 1
+  ): void {
+    const answersForQuestion = this.answers.filter(
+      (a) => a.questionId === questionId
+    );
+    const block = this.blocks.find((b) => b.id === blockId);
+    const scale = this.getScalesForBlock(blockId).find((s) => s.id === scaleId);
+    if (!block || !scale) return;
 
-  const isSingle = block.questionsType === 'single-choice';
-  const isBipolar = scale.scaleType === 'bipolar';
+    const isSingle = block.questionsType === 'single-choice';
+    const isBipolar = scale.scaleType === 'bipolar';
 
-  for (const answer of answersForQuestion) {
-    const ctrl = this.getWeightControl(blockId, scaleId, answer.id!);
-    const currentValue = ctrl.get('value')?.value;
+    for (const answer of answersForQuestion) {
+      const ctrl = this.getWeightControl(blockId, scaleId, answer.id!);
+      const currentValue = ctrl.get('value')?.value;
 
-    
-    if (answer.id === selectedAnswerId) {
-      if (currentValue === value) {
-        ctrl.get('value')?.setValue(0); 
-      } else {
-        ctrl.get('value')?.setValue(value); 
-      }
-    } else if (isSingle) {
-      
-      if (!isBipolar) {
-        
-        if (ctrl.get('value')?.value === 1) {
+      if (answer.id === selectedAnswerId) {
+        if (currentValue === value) {
           ctrl.get('value')?.setValue(0);
+        } else {
+          ctrl.get('value')?.setValue(value);
         }
-      } else {
-        
-        if (ctrl.get('value')?.value === -1 || ctrl.get('value')?.value === 1) {
-          ctrl.get('value')?.setValue(0);
+      } else if (isSingle) {
+        if (!isBipolar) {
+          if (ctrl.get('value')?.value === 1) {
+            ctrl.get('value')?.setValue(0);
+          }
+        } else {
+          if (
+            ctrl.get('value')?.value === -1 ||
+            ctrl.get('value')?.value === 1
+          ) {
+            ctrl.get('value')?.setValue(0);
+          }
         }
       }
+
+      ctrl.markAsTouched();
     }
-
-    ctrl.markAsTouched();
   }
-}
 
-
-  getWeightControl(blockId: number, scaleId: number, answerId: number): FormGroup {
+  getWeightControl(
+    blockId: number,
+    scaleId: number,
+    answerId: number
+  ): FormGroup {
     const group = this.weightsPerScale[blockId]?.[scaleId]?.[answerId];
     if (!group) {
-      throw new Error(`Control not found for block ${blockId} / scale ${scaleId} / answer ${answerId}`);
+      throw new Error(
+        `Control not found for block ${blockId} / scale ${scaleId} / answer ${answerId}`
+      );
     }
     return group;
   }
 
-  getValueControl(blockId: number, scaleId: number, answerId: number): FormControl<number | null> {
-    return this.weightsPerScale[blockId][scaleId][answerId].get('value') as FormControl<number | null>;
+  getValueControl(
+    blockId: number,
+    scaleId: number,
+    answerId: number
+  ): FormControl<number | null> {
+    return this.weightsPerScale[blockId][scaleId][answerId].get(
+      'value'
+    ) as FormControl<number | null>;
   }
 
   getScalesForBlock(blockId: number): Scale[] {
-    return this.scales.filter(s => s.blockId === blockId);
+    return this.scales.filter((s) => s.blockId === blockId);
   }
 
   getQuestionsByBlock(blockId: number): Question[] {
-    return this.questions.filter(q => q.blockId === blockId);
+    return this.questions.filter((q) => q.blockId === blockId);
   }
 
   getAnswersForQuestion(questionId: number): Answer[] {
-    return this.answers.filter(a => a.questionId === questionId);
+    return this.answers.filter((a) => a.questionId === questionId);
   }
 
-collectWeights(includeZeros = false): {
-  id?: number;
-  answerId: number;
-  scaleId: number;
-  value: number;
-}[] {
-  const result: {
+  collectWeights(includeZeros = false): {
     id?: number;
     answerId: number;
     scaleId: number;
     value: number;
-  }[] = [];
+  }[] {
+    const result: {
+      id?: number;
+      answerId: number;
+      scaleId: number;
+      value: number;
+    }[] = [];
 
-  for (const [blockId, scaleMap] of Object.entries(this.weightsPerScale)) {
-    for (const [scaleId, answersMap] of Object.entries(scaleMap)) {
-      for (const [answerId, group] of Object.entries(answersMap)) {
-        const value = group.get('value')?.value ?? 0;
-        const id = group.get('id')?.value;
+    for (const [blockId, scaleMap] of Object.entries(this.weightsPerScale)) {
+      for (const [scaleId, answersMap] of Object.entries(scaleMap)) {
+        for (const [answerId, group] of Object.entries(answersMap)) {
+          const value = group.get('value')?.value ?? 0;
+          const id = group.get('id')?.value;
 
-        if (includeZeros || value !== 0 || id !== null) {
-          result.push({
-            id: id ?? undefined,
-            answerId: +answerId,
-            scaleId: +scaleId,
-            value: value
-          });
+          if (includeZeros || value !== 0 || id !== null) {
+            result.push({
+              id: id ?? undefined,
+              answerId: +answerId,
+              scaleId: +scaleId,
+              value: value,
+            });
+          }
         }
       }
     }
+
+    return result;
   }
 
-  return result;
-}
+  async saveWeights(): Promise<void> {
+    const validation = this.validateAllQuestions();
 
-
-async saveWeights(navigate: boolean = false): Promise<void> {
-  const validation = this.validateAllQuestions();
-
-  if (!validation.isValid) {
-    if (validation.reason === 'questions') {
-      this.toast.show({ message: 'Please fill in all required questions before saving', type: 'error' });
-      if (validation.firstInvalidQuestionId !== undefined) {
-        setTimeout(() => this.scrollToQuestion(validation.firstInvalidQuestionId!), 0);
+    if (!validation.isValid) {
+      if (validation.reason === 'questions') {
+        this.toast.show({
+          message: 'Please fill in all required questions before saving',
+          type: 'error',
+        });
+        if (validation.firstInvalidQuestionId !== undefined) {
+          setTimeout(
+            () => this.scrollToQuestion(validation.firstInvalidQuestionId!),
+            0
+          );
+        }
+      } else if (validation.reason === 'scales') {
+        const scaleNames = validation.emptyScales?.join(', ') ?? '';
+        this.toast.show({
+          message: `The following scales have no weights assigned: ${scaleNames}`,
+          type: 'warning',
+        });
       }
-    } else if (validation.reason === 'scales') {
-      const scaleNames = validation.emptyScales?.join(', ') ?? '';
-      this.toast.show({
-        message: `The following scales have no weights assigned: ${scaleNames}`,
-        type: 'warning'
-      });
-    }
-    return;
-  }
-
-  const collected = this.collectWeights(true);
-  const toCreate = collected.filter(w => w.id === undefined);
-  const toUpdate = collected.filter(w => w.id !== undefined);
-
-  console.log('To create:', toCreate);
-  console.log('To update:', toUpdate);
-
-  try {
-    if (toCreate.length > 0) {
-      await firstValueFrom(this.testService.saveWeightsBatch(toCreate));
-      this.toast.show({ message: 'New weights saved successfully', type: 'success' });
+      return;
     }
 
-    if (toUpdate.length > 0) {
-      await firstValueFrom(this.testService.updateWeightsBatch(toUpdate));
-      this.toast.show({ message: 'Existing weights updated successfully', type: 'success' });
-    }
-  } catch (error) {
-    console.error('❌ Error saving/updating weights:', error);
-    this.toast.show({ message: 'Failed to save weights', type: 'error' });
-    return;
-  }
-
-  if (this.testState && this.testState.currentStep < 7) {
-    this.testState.currentStep = 7;
-    this.testState = await firstValueFrom(
-      this.testService.updateTestStateStep(this.testId!, this.testState)
-    );
-    console.log('Test state updated to step 6:', this.testState);
-    await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit', true));
-    this.router.navigate(['/test-weights/edit', this.testId]); 
-  }
-
-  this.resourceService.triggerRefresh();
-
-  if (navigate) {
-    this.handleNavigation(this.testState);
-  }
-}
-
-
- handleNavigation(testState: any) {
-    if (!testState) return;
-    const step = testState.currentStep;
-    console.log('Current step:', step);
-
-    if (step === 6) {
-      this.router.navigate(['/test-norms/new']);
-    } else if (step > 6) {
-      if (!this.testId) {
-        console.error('Cannot navigate to edit: testId is missing');
-        return;
-      }
-      this.router.navigate(['/test-norms/edit/', this.testId]);
-    }
-  }
-
-  getNumberOfAnswersForBlock(blockId: number): number[] {
-    const block = this.blocks.find(b => b.id === blockId);
-    if (!block || !block.numberOfAnswers || block.numberOfAnswers < 1) return [];
-    return Array.from({ length: block.numberOfAnswers }, (_, i) => i);
-  }
-
-isGradualScaleValid(blockId: number, questionId: number, scaleId: number): boolean {
-  const answers = this.getAnswersForQuestion(questionId);
-  const values = answers
-    .map(answer => this.getWeightControl(blockId, scaleId, answer.id!)?.get('value')?.value)
-    .filter(v => v !== 0);
-
-  const uniqueValues = new Set(values);
-  return values.length === uniqueValues.size;
-}
-
-isGradualScaleFullyFilled(blockId: number, questionId: number, scaleId: number): boolean {
-  const answers = this.getAnswersForQuestion(questionId);
-
-  console.group(`🔍 Проверка заполненности: question ${questionId}, scale ${scaleId}`);
-
-  const result = answers.every(answer => {
-    const control = this.getWeightControl(blockId, scaleId, answer.id!);
-    const raw = control?.get('value')?.value;
-    const value = Number(raw);
-
-    console.log(`Answer ${answer.id}: raw="${raw}", parsed=${value}, valid=${!isNaN(value) && value > 0}`);
-
-    return !isNaN(value) && value > 0;
-  });
-
-  console.log(`✅ Результат:`, result);
-  console.groupEnd();
-
-  return result;
-}
-
-
-
-isGradualScaleUnique(blockId: number, questionId: number, scaleId: number): boolean {
-  const answers = this.getAnswersForQuestion(questionId);
-  const values = answers
-    .map(answer => +this.getWeightControl(blockId, scaleId, answer.id!).get('value')! || 0)
-    .filter(v => v !== 0);
-
-  const unique = new Set(values);
-  return unique.size === values.length;
-}
-
-
-onSelectChange(event: Event, blockId: number, scaleId: number, answerId: number): void {
-  const value = parseInt((event.target as HTMLSelectElement).value, 10);
-  const control = this.getWeightControl(blockId, scaleId, answerId);
-  const answer = this.answers.find(a => a.id === answerId);
-  const scale = this.scales.find(s => s.id === scaleId);
-  if (!answer || !scale) return;
-
-  const question = this.questions.find(q => q.id === answer.questionId);
-  const block = this.blocks.find(b => b.id === blockId);
-  if (!question || !block) return;
-
-  // 🎯 Логика для ГРАДУАЛЬНОЙ шкалы
-  if (scale.scaleType === 'gradual') {
-    if (value !== 0) {
-      this.enforceGradualExclusivity(blockId, question.id!, scaleId);
-    }
-
-    // 💡 НЕ вызываем single-choice поведение здесь
-  } else {
-    // 🎯 Логика для ОСТАЛЬНЫХ шкал (униполярная, биполярная)
-    if (block.questionsType === 'single-choice' && value !== 0) {
-      this.enforceSingleChoiceAllScales(blockId, question.id!, answerId, scaleId);
-    }
-  }
-
-  control.get('value')?.setValue(value);
-  control.markAsTouched();
-if (this.isQuestionFullyTouched(blockId, question.id!)) {
-  // Добавим автоматически, если всё потрогано
-  if (!this.shownQuestions.includes(question.id!)) {
-    this.shownQuestions.push(question.id!);
-  }
-  this.updateValidation(blockId, question.id!);
-}
-
-
-}
-
-
-onCheckboxChange(event: Event, blockId: number, scaleId: number, answerId: number): void {
-  const checked = (event.target as HTMLInputElement).checked;
-  const control = this.getWeightControl(blockId, scaleId, answerId);
-  const answer = this.answers.find(a => a.id === answerId);
-  const scale = this.scales.find(s => s.id === scaleId);
-  if (!answer) return;
-
-  const question = this.questions.find(q => q.id === answer.questionId);
-  const block = this.blocks.find(b => b.id === blockId);
-
-  if (scale?.scaleType === 'gradual' && checked && question) {
-    this.enforceGradualExclusivity(blockId, question.id!, scaleId);
-  }
-  if (block?.questionsType === 'single-choice' && checked && question) {
-    this.enforceSingleChoiceAllScales(blockId, question.id!, answerId, scaleId);
-  }
-
-  control.get('value')?.setValue(checked ? 1 : 0);
-  control.markAsTouched();
-if (this.isQuestionFullyTouched(blockId, question!.id!)) {
-  if (!this.shownQuestions.includes(question!.id!)) {
-    this.shownQuestions.push(question!.id!);
-  }
-  this.updateValidation(blockId, question!.id!);
-}
-
-
-}
-
-enforceGradualExclusivity(blockId: number, questionId: number, selectedScaleId: number): void {
-  const answers = this.getAnswersForQuestion(questionId);
-  const scales = this.getScalesForBlock(blockId);
-
-  for (const answer of answers) {
-    for (const scale of scales) {
-      if (scale.id === selectedScaleId) continue;
-
-      const control = this.getWeightControl(blockId, scale.id!, answer.id!);
-      control.get('value')?.setValue(0);
-      control.markAsTouched();
-    }
-  }
-}
-
-
-enforceSingleChoiceAllScales(
-  blockId: number,
-  questionId: number,
-  selectedAnswerId: number,
-  selectedScaleId: number
-): void {
-  const answers = this.getAnswersForQuestion(questionId);
-  const scales = this.getScalesForBlock(blockId);
-
-  for (const answer of answers) {
-    for (const scale of scales) {
-      const isCurrent = answer.id === selectedAnswerId && scale.id === selectedScaleId;
-      if (isCurrent) continue;
-
-      const control = this.getWeightControl(blockId, scale.id!, answer.id!);
-      control.get('value')?.setValue(0);
-      control.markAsTouched();
-    }
-  }
-}
-
-getAllWeightsForQuestion(blockId: number, questionId: number): {
-  answerId: number;
-  scaleId: number;
-  value: number | null;
-}[] {
-  const result: { answerId: number; scaleId: number; value: number | null }[] = [];
-
-  const answers = this.getAnswersForQuestion(questionId);
-  const scales = this.getScalesForBlock(blockId);
-
-  for (const answer of answers) {
-    for (const scale of scales) {
-      const control = this.getWeightControl(blockId, scale.id!, answer.id!);
-      const value = control.get('value')?.value ?? 0;
-      result.push({
-        answerId: answer.id!,
-        scaleId: scale.id!,
-        value
-      });
-    }
-  }
-
-  return result;
-}
-
-
-invalidQuestions: number[] = [];
-/*onQuestionFocusOut(event: FocusEvent, blockId: number, questionId: number): void {
-  if (!this.isQuestionTouched(blockId, questionId)) return;
-
-  const hasWeight = this.hasAtLeastOneWeight(blockId, questionId);
-  const hasGradualMissing = this.hasMissingValuesGradualScale(blockId, questionId);
-  const hasGradualDuplicates = this.hasInvalidGradualScale(blockId, questionId);
-
-  this.invalidQuestions = this.invalidQuestions.filter(id => id !== questionId);
-  this.invalidGradualQuestionsMissingValues = this.invalidGradualQuestionsMissingValues.filter(id => id !== questionId);
-  this.invalidGradualQuestionsNotUnique = this.invalidGradualQuestionsNotUnique.filter(id => id !== questionId);
-
-  if (!hasWeight) this.invalidQuestions.push(questionId);
-  if (hasGradualMissing) this.invalidGradualQuestionsMissingValues.push(questionId);
-  if (hasGradualDuplicates) this.invalidGradualQuestionsNotUnique.push(questionId);
-  console.log('Invalid questions:', this.invalidQuestions);
-  console.log('Invalid gradual questions (missing values):', this.invalidGradualQuestionsMissingValues);
-  console.log('Invalid gradual questions (not unique):', this.invalidGradualQuestionsNotUnique);
-
-}*/
-
-
-
-hasAtLeastOneWeight(blockId: number, questionId: number): boolean {
-  const answers = this.getAnswersForQuestion(questionId);
-  const scales = this.getScalesForBlock(blockId);
-
-  for (const answer of answers) {
-    for (const scale of scales) {
-      const value = this.getWeightControl(blockId, scale.id!, answer.id!).get('value')?.value ?? 0;
-      if (value !== 0) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-isQuestionTouched(blockId: number, questionId: number): boolean {
-  const answers = this.getAnswersForQuestion(questionId);
-  const scales = this.getScalesForBlock(blockId);
-
-  for (const answer of answers) {
-    for (const scale of scales) {
-      const control = this.getWeightControl(blockId, scale.id!, answer.id!);
-      if (control.touched) return true;
-    }
-  }
-
-  return false;
-}
-
-isQuestionFullyTouched(blockId: number, questionId: number): boolean {
-  const answers = this.getAnswersForQuestion(questionId);
-  const scales = this.getScalesForBlock(blockId);
-
-  for (const answer of answers) {
-    for (const scale of scales) {
-      const control = this.getWeightControl(blockId, scale.id!, answer.id!);
-      if (!control.touched) return false;
-    }
-  }
-
-  return true;
-}
-
-invalidGradualQuestionsNotUnique: number[] = [];
-invalidGradualQuestionsMissingValues: number[] = [];
-
-validateAllQuestions(): { isValid: boolean, reason?: 'questions' | 'scales', firstInvalidQuestionId?: number, emptyScales?: string[] } {
-  this.invalidQuestions = [];
-
-  for (const block of this.blocks) {
-    const blockId = block.id!;
-    const questions = this.getQuestionsByBlock(blockId);
-    const scales = this.getScalesForBlock(blockId);
-
-    for (const question of questions) {
-      const questionId = question.id!;
-      const hasWeight = this.hasAtLeastOneWeight(blockId, questionId);
-
-      if (!hasWeight) {
-        this.invalidQuestions.push(questionId);
-        continue;
+    const collected = this.collectWeights(true);
+    const toCreate = collected.filter((w) => w.id === undefined);
+    const toUpdate = collected.filter((w) => w.id !== undefined);
+
+    try {
+      if (toCreate.length > 0) {
+        await firstValueFrom(this.testService.saveWeightsBatch(toCreate));
+        this.toast.show({
+          message: 'Weights saved successfully',
+          type: 'success',
+        });
+        this.markAllControlsPristine();
+        console.log('[DEBUG] После сохранения:', this.hasUnsavedChanges());
       }
 
-      for (const scale of scales) {
-        if (scale.scaleType === 'gradual') {
-          const isUnique = this.isGradualScaleValid(blockId, questionId, scale.id!);
-          if (!isUnique) {
-            this.invalidQuestions.push(questionId);
-            break;
+      if (toUpdate.length > 0) {
+        await firstValueFrom(this.testService.updateWeightsBatch(toUpdate));
+        this.toast.show({
+          message: 'Weights updated successfully',
+          type: 'success',
+        });
+        this.markAllControlsPristine();
+        console.log('[DEBUG] После сохранения:', this.hasUnsavedChanges());
+      }
+    } catch (error) {
+      console.error('Error saving/updating weights:', error);
+      this.toast.show({ message: 'Failed to save weights', type: 'error' });
+      return;
+    }
+
+    if (this.testState && this.testState.currentStep < 6) {
+      this.testState.currentStep = 6;
+      this.testState = await firstValueFrom(
+        this.testService.updateTestStateStep(this.testId!, this.testState)
+      );
+      console.log('Test state updated to step 6:', this.testState);
+      await firstValueFrom(
+        this.testContextService.loadContextIfNeeded(this.testId!, 'edit', 6, true)
+      );
+      this.router.navigate(['/test-weights/edit', this.testId]);
+    }
+
+    this.resourceService.triggerRefresh();
+  }
+
+  hasUnsavedChanges(): boolean {
+    for (const block of this.blocks) {
+      const questions = this.getQuestionsByBlock(block.id!);
+      for (const question of questions) {
+        if (this.isQuestionTouched(block.id!, question.id!)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  markAllControlsPristine(): void {
+    for (const block of Object.values(this.weightsPerScale)) {
+      for (const scale of Object.values(block)) {
+        for (const group of Object.values(scale)) {
+          group.markAsPristine();
+          group.markAsUntouched();
+
+          for (const control of Object.values(group.controls)) {
+            control.markAsPristine();
+            control.markAsUntouched();
           }
         }
       }
     }
   }
 
-  if (this.invalidQuestions.length > 0) {
-    return {
-      isValid: false,
-      reason: 'questions',
-      firstInvalidQuestionId: this.invalidQuestions[0]
-    };
+  confirmNavigationVisible = false;
+  confirmNavigationMessage =
+    'Are you sure you want to proceed? All unsaved changes will be lost';
+  pendingStep: number | null = null;
+
+  navigate(): void {
+    console.log('Navigating to next step...', this.hasUnsavedChanges());
+    if (this.hasUnsavedChanges() && this.mode === 'edit') {
+      this.pendingStep = (this.testState?.currentStep ?? 1) + 1;
+      this.confirmNavigationVisible = true;
+      return;
+    }
+
+    if (this.hasUnsavedChanges() && this.mode === 'new') {
+      this.toast.show({
+        message: 'Please save your changes before proceeding',
+        type: 'warning',
+      });
+      return;
+    }
+
+    const validation = this.validateAllQuestions();
+
+    if (!validation.isValid) {
+      this.toast.show({
+        message: 'Please fill all required fields before proceeding',
+        type: 'warning',
+      });
+      return;
+    }
+
+    this.toast.show({ message: 'Going to next step...', type: 'info' });
+
+    setTimeout(() => {
+      const route =
+        this.testState?.currentStep === 6
+          ? ['/test-norms/new']
+          : ['/test-norms/edit', this.testId];
+      this.router.navigate(route);
+    }, 700);
   }
 
-  const emptyScales = this.getEmptyScales();
-  this.emptyScales = emptyScales;
-  if (emptyScales.length > 0) {
-    return {
-      isValid: false,
-      reason: 'scales',
-      emptyScales: emptyScales
-    };
+  onStepSelected(step: number): void {
+    if (this.hasUnsavedChanges()) {
+      this.pendingStep = step;
+      this.confirmNavigationVisible = true;
+      return;
+    }
+
+    this.navigateToStep(step);
   }
 
-  return { isValid: true };
-}
-
-
-
-
-@ViewChildren('questionContainer') questionContainers!: QueryList<ElementRef<HTMLElement>>;
-scrollToQuestion(questionId: number): void {
-  const el = document.querySelector(`[data-question-id="${questionId}"]`);
-  if (el) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
-}
-
-hasAnyWeightInScale(blockId: number, scaleId: number): boolean {
-  const blockAnswers = this.answers.filter(a =>
-    this.questions.some(q => q.blockId === blockId && q.id === a.questionId)
-  );
-
-  for (const answer of blockAnswers) {
-    const value = this.getWeightControl(blockId, scaleId, answer.id!).get('value')?.value ?? 0;
-    if (value !== 0) return true;
+  onConfirmNavigation(): void {
+    if (this.pendingStep !== null) {
+      this.navigateToStep(this.pendingStep);
+    }
+    this.resetNavigationState();
   }
 
-  return false;
-}
+  navigateToStep(step: number): void {
+    const id = this.testId || this.sessionStorage.getTestId();
+    if (!id || !stepRoutes[step]) return;
+    this.router.navigate(stepRoutes[step](id));
+  }
 
-emptyScales: string[] = [];
+  resetNavigationState(): void {
+    this.confirmNavigationVisible = false;
+    this.pendingStep = null;
+  }
 
-getEmptyScales(): string [] {
-  const empty: string [] = [];
+  onCancelNavigation(): void {
+    this.resetNavigationState();
+  }
 
-  for (const block of this.blocks) {
-    const blockId = block.id!;
+  getNumberOfAnswersForBlock(blockId: number): number[] {
+    const block = this.blocks.find((b) => b.id === blockId);
+    if (!block || !block.numberOfAnswers || block.numberOfAnswers < 1)
+      return [];
+    return Array.from({ length: block.numberOfAnswers }, (_, i) => i);
+  }
+
+  isGradualScaleValid(
+    blockId: number,
+    questionId: number,
+    scaleId: number
+  ): boolean {
+    const answers = this.getAnswersForQuestion(questionId);
+    const values = answers
+      .map(
+        (answer) =>
+          this.getWeightControl(blockId, scaleId, answer.id!)?.get('value')
+            ?.value
+      )
+      .filter((v) => v !== 0);
+
+    const uniqueValues = new Set(values);
+    return values.length === uniqueValues.size;
+  }
+
+  isGradualScaleFullyFilled(
+    blockId: number,
+    questionId: number,
+    scaleId: number
+  ): boolean {
+    const answers = this.getAnswersForQuestion(questionId);
+
+    const result = answers.every((answer) => {
+      const control = this.getWeightControl(blockId, scaleId, answer.id!);
+      const raw = control?.get('value')?.value;
+      const value = Number(raw);
+
+      console.log(
+        `Answer ${answer.id}: raw="${raw}", parsed=${value}, valid=${
+          !isNaN(value) && value > 0
+        }`
+      );
+
+      return !isNaN(value) && value > 0;
+    });
+    console.groupEnd();
+
+    return result;
+  }
+
+  isGradualScaleUnique(
+    blockId: number,
+    questionId: number,
+    scaleId: number
+  ): boolean {
+    const answers = this.getAnswersForQuestion(questionId);
+    const values = answers
+      .map(
+        (answer) =>
+          +this.getWeightControl(blockId, scaleId, answer.id!).get('value')! ||
+          0
+      )
+      .filter((v) => v !== 0);
+
+    const unique = new Set(values);
+    return unique.size === values.length;
+  }
+
+  onSelectChange(
+    event: Event,
+    blockId: number,
+    scaleId: number,
+    answerId: number
+  ): void {
+    const value = parseInt((event.target as HTMLSelectElement).value, 10);
+    const control = this.getWeightControl(blockId, scaleId, answerId);
+    const answer = this.answers.find((a) => a.id === answerId);
+    const scale = this.scales.find((s) => s.id === scaleId);
+    if (!answer || !scale) return;
+
+    const question = this.questions.find((q) => q.id === answer.questionId);
+    const block = this.blocks.find((b) => b.id === blockId);
+    if (!question || !block) return;
+
+    if (scale.scaleType === 'gradual') {
+      if (value !== 0) {
+        this.enforceGradualExclusivity(blockId, question.id!, scaleId);
+      }
+    } else {
+      if (block.questionsType === 'single-choice' && value !== 0) {
+        this.enforceSingleChoiceAllScales(
+          blockId,
+          question.id!,
+          answerId,
+          scaleId
+        );
+      }
+    }
+
+    control.get('value')?.setValue(value);
+    control.markAsTouched();
+    if (this.isQuestionFullyTouched(blockId, question.id!)) {
+      if (!this.shownQuestions.includes(question.id!)) {
+        this.shownQuestions.push(question.id!);
+      }
+      this.updateValidation(blockId, question.id!);
+    }
+  }
+
+  onCheckboxChange(
+    event: Event,
+    blockId: number,
+    scaleId: number,
+    answerId: number
+  ): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    const control = this.getWeightControl(blockId, scaleId, answerId);
+    const answer = this.answers.find((a) => a.id === answerId);
+    const scale = this.scales.find((s) => s.id === scaleId);
+    if (!answer) return;
+
+    const question = this.questions.find((q) => q.id === answer.questionId);
+    const block = this.blocks.find((b) => b.id === blockId);
+
+    if (scale?.scaleType === 'gradual' && checked && question) {
+      this.enforceGradualExclusivity(blockId, question.id!, scaleId);
+    }
+    if (block?.questionsType === 'single-choice' && checked && question) {
+      this.enforceSingleChoiceAllScales(
+        blockId,
+        question.id!,
+        answerId,
+        scaleId
+      );
+    }
+
+    control.get('value')?.setValue(checked ? 1 : 0);
+    control.markAsTouched();
+    if (this.isQuestionFullyTouched(blockId, question!.id!)) {
+      if (!this.shownQuestions.includes(question!.id!)) {
+        this.shownQuestions.push(question!.id!);
+      }
+      this.updateValidation(blockId, question!.id!);
+    }
+  }
+
+  enforceGradualExclusivity(
+    blockId: number,
+    questionId: number,
+    selectedScaleId: number
+  ): void {
+    const answers = this.getAnswersForQuestion(questionId);
     const scales = this.getScalesForBlock(blockId);
 
-    for (const scale of scales) {
-      if (!this.hasAnyWeightInScale(blockId, scale.id!)) {
-        empty.push(scale.pole1!);
+    for (const answer of answers) {
+      for (const scale of scales) {
+        if (scale.id === selectedScaleId) continue;
+
+        const control = this.getWeightControl(blockId, scale.id!, answer.id!);
+        control.get('value')?.setValue(0);
+        control.markAsTouched();
       }
     }
   }
 
-  return empty;
-}
-
-generateRange(n: number): number[] {
-  return Array.from({ length: n }, (_, i) => i + 1);
-}
-
-hasInvalidGradualScale(blockId: number, questionId: number): boolean {
-  const scales = this.getScalesForBlock(blockId);
-  for (const scale of scales) {
-    if (scale.scaleType === 'gradual') {
-      if (!this.isGradualScaleValid(blockId, questionId, scale.id!)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-hasMissingValuesGradualScale(blockId: number, questionId: number): boolean {
-  const scales = this.getScalesForBlock(blockId)
-    .filter(scale => scale.scaleType === 'gradual');
-
-  // 👇 Фильтруем только те шкалы, у которых есть ненулевые значения в этом вопросе
-  const relevantScales = scales.filter(scale => {
+  enforceSingleChoiceAllScales(
+    blockId: number,
+    questionId: number,
+    selectedAnswerId: number,
+    selectedScaleId: number
+  ): void {
     const answers = this.getAnswersForQuestion(questionId);
-    return answers.some(answer => {
-      const value = Number(this.getWeightControl(blockId, scale.id!, answer.id!)?.get('value')?.value);
-      return value !== 0;
-    });
-  });
+    const scales = this.getScalesForBlock(blockId);
 
-  return relevantScales.some(scale =>
-    !this.isGradualScaleFullyFilled(blockId, questionId, scale.id!)
-  );
-}
+    for (const answer of answers) {
+      for (const scale of scales) {
+        const isCurrent =
+          answer.id === selectedAnswerId && scale.id === selectedScaleId;
+        if (isCurrent) continue;
 
-/*private updateValidation(blockId: number, questionId: number): void {
-  if (!this.isQuestionFullyTouched(blockId, questionId)) return;
-
-  const hasWeight = this.hasAtLeastOneWeight(blockId, questionId);
-  const hasGradualMissing = this.hasMissingValuesGradualScale(blockId, questionId);
-  const hasGradualDuplicates = this.hasInvalidGradualScale(blockId, questionId);
-
-  this.invalidQuestions = this.invalidQuestions.filter(id => id !== questionId);
-  this.invalidGradualQuestionsMissingValues = this.invalidGradualQuestionsMissingValues.filter(id => id !== questionId);
-  this.invalidGradualQuestionsNotUnique = this.invalidGradualQuestionsNotUnique.filter(id => id !== questionId);
-  
-  if (!hasWeight) this.invalidQuestions.push(questionId);
-  if (hasGradualMissing) this.invalidGradualQuestionsMissingValues.push(questionId);
-  if (hasGradualDuplicates) this.invalidGradualQuestionsNotUnique.push(questionId);
-}*/
-
-shownQuestions: number[] = [];
-
-onQuestionFocusOut(event: FocusEvent, blockId: number, questionId: number): void {
-  if (!this.shownQuestions.includes(questionId)) {
-    this.shownQuestions.push(questionId);
+        const control = this.getWeightControl(blockId, scale.id!, answer.id!);
+        control.get('value')?.setValue(0);
+        control.markAsTouched();
+      }
+    }
   }
-  this.updateValidation(blockId, questionId);
-}
 
-private updateValidation(blockId: number, questionId: number): void {
-  const hasWeight = this.hasAtLeastOneWeight(blockId, questionId);
-  const hasGradualMissing = this.hasMissingValuesGradualScale(blockId, questionId);
-  const hasGradualDuplicates = this.hasInvalidGradualScale(blockId, questionId);
+  getAllWeightsForQuestion(
+    blockId: number,
+    questionId: number
+  ): {
+    answerId: number;
+    scaleId: number;
+    value: number | null;
+  }[] {
+    const result: {
+      answerId: number;
+      scaleId: number;
+      value: number | null;
+    }[] = [];
 
-  this.invalidQuestions = this.invalidQuestions.filter(id => id !== questionId);
-  this.invalidGradualQuestionsMissingValues = this.invalidGradualQuestionsMissingValues.filter(id => id !== questionId);
-  this.invalidGradualQuestionsNotUnique = this.invalidGradualQuestionsNotUnique.filter(id => id !== questionId);
+    const answers = this.getAnswersForQuestion(questionId);
+    const scales = this.getScalesForBlock(blockId);
 
-  const shouldShow = this.shownQuestions.includes(questionId);
+    for (const answer of answers) {
+      for (const scale of scales) {
+        const control = this.getWeightControl(blockId, scale.id!, answer.id!);
+        const value = control.get('value')?.value ?? 0;
+        result.push({
+          answerId: answer.id!,
+          scaleId: scale.id!,
+          value,
+        });
+      }
+    }
 
-  if (!hasWeight && shouldShow) this.invalidQuestions.push(questionId);
-  if (hasGradualMissing && shouldShow) this.invalidGradualQuestionsMissingValues.push(questionId);
-  if (hasGradualDuplicates && shouldShow) this.invalidGradualQuestionsNotUnique.push(questionId);
-}
+    return result;
+  }
 
-  onStepSelected(step: number) {
-    if (!this.testId || !stepRoutes[step]) return;
-    this.router.navigate(stepRoutes[step](this.testId));
+  invalidQuestions: number[] = [];
+
+  hasAtLeastOneWeight(blockId: number, questionId: number): boolean {
+    const answers = this.getAnswersForQuestion(questionId);
+    const scales = this.getScalesForBlock(blockId);
+
+    for (const answer of answers) {
+      for (const scale of scales) {
+        const value =
+          this.getWeightControl(blockId, scale.id!, answer.id!).get('value')
+            ?.value ?? 0;
+        if (value !== 0) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  isQuestionTouched(blockId: number, questionId: number): boolean {
+    const answers = this.getAnswersForQuestion(questionId);
+    const scales = this.getScalesForBlock(blockId);
+
+    for (const answer of answers) {
+      for (const scale of scales) {
+        const control = this.getWeightControl(blockId, scale.id!, answer.id!);
+        if (control.touched) return true;
+      }
+    }
+
+    return false;
+  }
+
+  isQuestionFullyTouched(blockId: number, questionId: number): boolean {
+    const answers = this.getAnswersForQuestion(questionId);
+    const scales = this.getScalesForBlock(blockId);
+
+    for (const answer of answers) {
+      for (const scale of scales) {
+        const control = this.getWeightControl(blockId, scale.id!, answer.id!);
+        if (!control.touched) return false;
+      }
+    }
+
+    return true;
+  }
+
+  invalidGradualQuestionsNotUnique: number[] = [];
+  invalidGradualQuestionsMissingValues: number[] = [];
+
+  validateAllQuestions(): {
+    isValid: boolean;
+    reason?: 'questions' | 'scales';
+    firstInvalidQuestionId?: number;
+    emptyScales?: string[];
+  } {
+    this.invalidQuestions = [];
+
+    for (const block of this.blocks) {
+      const blockId = block.id!;
+      const questions = this.getQuestionsByBlock(blockId);
+      const scales = this.getScalesForBlock(blockId);
+
+      for (const question of questions) {
+        const questionId = question.id!;
+        const hasWeight = this.hasAtLeastOneWeight(blockId, questionId);
+
+        if (!hasWeight) {
+          this.invalidQuestions.push(questionId);
+          continue;
+        }
+
+        for (const scale of scales) {
+          if (scale.scaleType === 'gradual') {
+            const isUnique = this.isGradualScaleValid(
+              blockId,
+              questionId,
+              scale.id!
+            );
+            const isFilled = this.isGradualScaleFullyFilled(
+              blockId,
+              questionId,
+              scale.id!
+            );
+
+            if (!isUnique) {
+              this.invalidGradualQuestionsNotUnique.push(questionId);
+            }
+
+            if (!isFilled) {
+              this.invalidGradualQuestionsMissingValues.push(questionId);
+            }
+
+            if (!isUnique || !isFilled) {
+              this.invalidQuestions.push(questionId);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (this.invalidQuestions.length > 0) {
+      return {
+        isValid: false,
+        reason: 'questions',
+        firstInvalidQuestionId: this.invalidQuestions[0],
+      };
+    }
+
+    const emptyScales = this.getEmptyScales();
+    this.emptyScales = emptyScales;
+    if (emptyScales.length > 0) {
+      return {
+        isValid: false,
+        reason: 'scales',
+        emptyScales: emptyScales,
+      };
+    }
+
+    return { isValid: true };
+  }
+
+  @ViewChildren('questionContainer') questionContainers!: QueryList<
+    ElementRef<HTMLElement>
+  >;
+  scrollToQuestion(questionId: number): void {
+    const el = document.querySelector(`[data-question-id="${questionId}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  hasAnyWeightInScale(blockId: number, scaleId: number): boolean {
+    const blockAnswers = this.answers.filter((a) =>
+      this.questions.some((q) => q.blockId === blockId && q.id === a.questionId)
+    );
+
+    for (const answer of blockAnswers) {
+      const value =
+        this.getWeightControl(blockId, scaleId, answer.id!).get('value')
+          ?.value ?? 0;
+      if (value !== 0) return true;
+    }
+
+    return false;
+  }
+
+  emptyScales: string[] = [];
+
+  getEmptyScales(): string[] {
+    const empty: string[] = [];
+
+    for (const block of this.blocks) {
+      const blockId = block.id!;
+      const scales = this.getScalesForBlock(blockId);
+
+      for (const scale of scales) {
+        if (!this.hasAnyWeightInScale(blockId, scale.id!)) {
+          empty.push(scale.pole1!);
+        }
+      }
+    }
+
+    return empty;
+  }
+
+  generateRange(n: number): number[] {
+    return Array.from({ length: n }, (_, i) => i + 1);
+  }
+
+  hasInvalidGradualScale(blockId: number, questionId: number): boolean {
+    const scales = this.getScalesForBlock(blockId);
+    for (const scale of scales) {
+      if (scale.scaleType === 'gradual') {
+        if (!this.isGradualScaleValid(blockId, questionId, scale.id!)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  hasMissingValuesGradualScale(blockId: number, questionId: number): boolean {
+    const scales = this.getScalesForBlock(blockId).filter(
+      (scale) => scale.scaleType === 'gradual'
+    );
+
+    const relevantScales = scales.filter((scale) => {
+      const answers = this.getAnswersForQuestion(questionId);
+      return answers.some((answer) => {
+        const value = Number(
+          this.getWeightControl(blockId, scale.id!, answer.id!)?.get('value')
+            ?.value
+        );
+        return value !== 0;
+      });
+    });
+
+    return relevantScales.some(
+      (scale) => !this.isGradualScaleFullyFilled(blockId, questionId, scale.id!)
+    );
+  }
+
+  shownQuestions: number[] = [];
+
+  onQuestionFocusOut(
+    event: FocusEvent,
+    blockId: number,
+    questionId: number
+  ): void {
+    if (!this.shownQuestions.includes(questionId)) {
+      this.shownQuestions.push(questionId);
+    }
+    this.updateValidation(blockId, questionId);
+  }
+
+  private updateValidation(blockId: number, questionId: number): void {
+    const hasWeight = this.hasAtLeastOneWeight(blockId, questionId);
+    const hasGradualMissing = this.hasMissingValuesGradualScale(
+      blockId,
+      questionId
+    );
+    const hasGradualDuplicates = this.hasInvalidGradualScale(
+      blockId,
+      questionId
+    );
+
+    this.invalidQuestions = this.invalidQuestions.filter(
+      (id) => id !== questionId
+    );
+    this.invalidGradualQuestionsMissingValues =
+      this.invalidGradualQuestionsMissingValues.filter(
+        (id) => id !== questionId
+      );
+    this.invalidGradualQuestionsNotUnique =
+      this.invalidGradualQuestionsNotUnique.filter((id) => id !== questionId);
+
+    const shouldShow = this.shownQuestions.includes(questionId);
+
+    if (!hasWeight && shouldShow) this.invalidQuestions.push(questionId);
+    if (hasGradualMissing && shouldShow)
+      this.invalidGradualQuestionsMissingValues.push(questionId);
+    if (hasGradualDuplicates && shouldShow)
+      this.invalidGradualQuestionsNotUnique.push(questionId);
+  }
+
+  getErrorType(
+    questionId: number
+  ): 'none' | 'missing' | 'missingValues' | 'notUnique' {
+    if (this.invalidGradualQuestionsMissingValues.includes(questionId))
+      return 'missingValues';
+    if (this.invalidGradualQuestionsNotUnique.includes(questionId))
+      return 'notUnique';
+    if (this.invalidQuestions.includes(questionId)) return 'missing';
+    return 'none';
+  }
+
+  beforeUnloadHandler = (event: BeforeUnloadEvent) => {
+    if (this.hasUnsavedChanges()) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  };
+
+  ngOnDestroy() {
+    window.removeEventListener('beforeunload', this.beforeUnloadHandler);
   }
 }

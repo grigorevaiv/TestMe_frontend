@@ -1,80 +1,105 @@
-<div class="min-h-screen bg-white pt-6 p-4 sm:px-6 lg:px-8">
-<app-progress-bar
-    *ngIf="testState"   
+<div class="min-h-screen bg-white pt-6 p-4 sm:px-6 lg:px-6">
+  <app-progress-bar
+    *ngIf="testState"
     [step]="step"
     [totalSteps]="8"
     [completedSteps]="completedStepsArray"
     (stepClicked)="onStepSelected($event)"
     [maxAllowedStep]="testState.currentStep"
-    ></app-progress-bar>
-  <div class="max-w-3xl mx-auto">
-    <h1 class="text-xl sm:text-2xl font-semibold text-gray-800 mb-6">Define scale norms</h1>
+  ></app-progress-bar>
 
-    <div class="space-y-8">
-      @for (scale of scales; track scale.id) {
-        <div class="border border-gray-200 rounded-xl shadow-sm p-6 bg-slate-50">
-          <h2 class="text-lg sm:text-xl font-semibold text-slate-700 mb-4">
-            {{ scale.pole1 }}
-          </h2>
+  <div class="w-full max-w-[50vw] mx-auto">
+    <div class="flex items-center justify-between mb-4">
+      <h1 class="text-xl sm:text-2xl font-semibold text-gray-800">Define scale norms</h1>
+    </div>
+    <hr class="mb-6" />
 
-          <div [formGroup]="getNormsFormForScale(scale.id!)" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm sm:text-base font-medium text-gray-700 mb-1">Mean</label>
-              <input type="number" formControlName="mean"
-                class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-              />
+    @for (scale of scales; track scale.id) {
+      <div class="mb-8 border border-gray-300 rounded-xl p-4 bg-white shadow-sm" #normBlock>
+        <h2 class="text-lg sm:text-xl font-semibold text-slate-700 mb-3">
+          {{ scale.pole1 }}
+        </h2>
+        <hr class="mb-4" />
 
-            </div>
-            <div>
-              <label class="block text-sm sm:text-base font-medium text-gray-700 mb-1">Standard Deviation</label>
-              <input type="number" formControlName="stdDev"
-                class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-              />
-            </div>
-            <div>
-              <label class="block text-sm sm:text-base font-medium text-gray-700 mb-1">Type</label>
-              <select formControlName="type"
-                class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm text-gray-800 bg-white focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
-                <option value="">— Select Type —</option>
-                <option value="sten">Sten</option>
-                <option value="percentile">Percentile</option>
-              </select>
-              <p *ngIf="
+        <div [formGroup]="getNormsFormForScale(scale.id!)" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm sm:text-base font-medium text-gray-700 mb-1">Mean</label>
+            <input
+              type="number"
+              formControlName="mean"
+              class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm sm:text-base font-medium text-gray-700 mb-1">Standard Deviation</label>
+            <input
+              type="number"
+              formControlName="stdDev"
+              class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm sm:text-base font-medium text-gray-700 mb-1">Type</label>
+            <select
+              formControlName="type"
+              class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm text-gray-800 bg-white focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            >
+              <option value="">— Select Type —</option>
+              <option value="sten">Sten</option>
+              <option value="percentile" disabled>Percentile (coming soon)</option>
+              <option value="t-score" disabled>T-score  (coming soon)</option>
+              <option value="z-score" disabled>Z-score (coming soon)</option>
+            </select>
+            <p
+              *ngIf="
                 getNormsFormForScale(scale.id!)?.get('type')?.touched &&
                 getNormsFormForScale(scale.id!)?.get('type')?.hasError('required')
-                " class="text-red-500 text-sm mt-1">
-                Please select a type
-                </p>
-            </div>
-            <div class="flex items-end">
-              <button
-                class="bg-sky-600 hover:bg-sky-700 text-white font-medium text-sm px-4 py-2 rounded shadow transition"
-                (click)="setTheoreticalNorms(scale.id!)"
-              >
-                Auto-calculate
-              </button>
-            </div>
-          </div>
-          <p *ngIf="hasAllZeroValues(scale.id!) && wasFormTouched(scale.id!)"
-            class="text-red-500 text-sm mt-2">
-            All values are zero. Are you sure this is intentional?<br>
-            If you are unsure, please click the "Auto-calculate" button to set theoretical norms
+              "
+              class="text-red-500 text-sm mt-1"
+            >
+              Please select a type
             </p>
+          </div>
+          <div class="flex items-end">
+            <button
+              class="bg-sky-700 hover:bg-sky-800 text-white text-sm sm:text-base font-medium px-4 py-2 rounded transition"
+              (click)="setTheoreticalNorms(scale.id!)"
+            >
+              Auto-calculate
+            </button>
+          </div>
         </div>
-      }
-    </div>
 
-    <div class="flex justify-end gap-4 mt-8">
+        <p
+          *ngIf="hasAllZeroValues(scale.id!) && wasFormTouched(scale.id!)"
+          class="text-red-500 text-sm mt-2"
+        >
+          All values are zero. Are you sure this is intentional?<br />
+          If you are unsure, please click the "Auto-calculate" button to set theoretical norms.
+        </p>
+      </div>
+    }
+
+    <div class="flex flex-col sm:flex-row justify-between gap-4 mt-8">
       <button
-        class="bg-sky-700 hover:bg-sky-800 text-white text-sm sm:text-base md:text-lg font-medium px-6 py-2 rounded transition disabled:bg-gray-400 disabled:cursor-not-allowed"
-        (click)="saveNorms()">
+        class="w-full sm:w-auto bg-sky-700 hover:bg-sky-800 text-white text-sm sm:text-base md:text-lg font-medium px-6 py-2 rounded transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+        (click)="saveNorms()"
+      >
         Save
       </button>
+
       <button
-        class="bg-sky-700 hover:bg-sky-800 text-white text-sm sm:text-base md:text-lg font-medium px-6 py-2 rounded transition disabled:bg-gray-400 disabled:cursor-not-allowed"
-        (click)="saveNorms(true)">
+        class="w-full sm:w-auto bg-sky-700 hover:bg-sky-800 text-white text-sm sm:text-base md:text-lg font-medium px-6 py-2 rounded transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+        (click)="navigate()"
+      >
         Next →
       </button>
     </div>
   </div>
 </div>
+  <app-confirm-dialog
+    [visible]="confirmNavigationVisible"
+    [message]="confirmNavigationMessage"
+    (confirm)="onConfirmNavigation()"
+    (cancel)="onCancelNavigation()"
+    ></app-confirm-dialog>

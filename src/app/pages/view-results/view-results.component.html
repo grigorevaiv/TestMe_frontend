@@ -1,76 +1,198 @@
-<div *ngIf="results.length > 0; else noResults" class="space-y-4">
-  <h3 class="text-xl font-semibold mb-4">Results of {{patientFullName}}</h3>
+<div class="max-w-5xl mx-auto px-4 py-8">
+  <!-- Заголовок и кнопка -->
+  <div class="flex justify-between items-center mb-6">
+    <h3 class="text-2xl font-bold text-gray-800">
+      Results for {{ patientFullName }}
+    </h3>
+    <button
+      (click)="openModal()"
+      class="px-5 py-2.5 bg-sky-600 text-white font-medium rounded hover:bg-sky-700 transition"
+    >
+      + Assign Test
+    </button>
+  </div>
 
-  <div
-    *ngFor="let result of results"
-    class="bg-sky-50 hover:bg-sky-100 border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition flex flex-col gap-2"
-  >
-    <div class="flex flex-col sm:flex-row justify-between gap-4">
-      <div>
-        <h4 class="text-lg font-semibold text-gray-800">{{ result.testTitle }}</h4>
-        <p>{{result | json}}</p>
-        <p class="text-sm text-gray-600 mt-1">Результат ID: <strong>{{ result.testResultId }}</strong></p>
-        <p class="text-sm text-gray-600">Тест ID: <strong>{{ result.testId }}</strong></p>
-        <p class="text-sm text-gray-600">Дата: <strong>{{ result.createdAt | date:'mediumDate' }}</strong></p>
+  <hr class="mb-8 border-gray-300" />
+  <app-time-filter (filterChanged)="applyFilter($event)" />
+  <!-- Карточки с результатами -->
+  <div *ngFor="let result of filteredResults" class="mb-10">
+    <!-- Референс на экспортируемую карточку -->
+    <div
+      #resultCard
+      class="bg-white border border-gray-200 rounded-xl p-6 shadow-md hover:shadow-lg transition space-y-6"
+    >
+      <!-- Заголовок и дата -->
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+        <div>
+          <h4 class="text-xl font-semibold text-gray-800">
+            {{ result.testTitle }}
+          </h4>
+          <p class="text-sm text-gray-500 mt-1">
+            Taken on
+            <span class="font-medium text-gray-700">
+              {{ result.createdAt | date : "longDate" }}
+            </span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Кнопка раскрытия -->
+      <button
+        (click)="toggleExpand(result.testResultId)"
+        class="flex items-center text-sm text-sky-700 hover:underline mt-2"
+      >
+        <span>
+          {{
+            expandedResults.has(result.testResultId)
+              ? "Hide details"
+              : "Show details"
+          }}
+        </span>
+        <svg
+          class="ml-1 w-4 h-4 transform transition-transform duration-300"
+          [ngClass]="{ 'rotate-180': expandedResults.has(result.testResultId) }"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      <!-- Контент карточки -->
+      <div *ngIf="expandedResults.has(result.testResultId)" class="space-y-8">
+        <ng-container *ngFor="let group of groupByBlock(result.results)">
+          <div class="mb-8">
+            <h5 class="text-lg font-bold text-gray-800 uppercase border-b border-gray-300 pb-1 mb-4">
+              {{ group.block }}
+            </h5>
+
+            <div *ngFor="let scale of group.scales" class="mb-6">
+              <div class="flex justify-between text-sm text-gray-700 font-medium mb-1 px-1">
+                <span>
+                  {{ scale.scalePole2 || scale.scalePole1 }} @if(!scale.scalePole2){(-)}
+                </span>
+                <span>
+                  {{ scale.scalePole1 }} @if(!scale.scalePole2){(+) }
+                </span>
+              </div>
+
+              <!-- Шкала -->
+              <div class="relative w-full bg-gray-300 h-4 rounded">
+                <div
+                  class="absolute top-0 left-0 h-4 bg-sky-600 rounded-l"
+                  [style.width.%]="(scale.normalized - 1) * (100 / 9)"
+                ></div>
+
+                <ng-container *ngFor="let i of [1,2,3,4,5,6,7,8]">
+                  <div
+                    class="absolute h-4 w-px bg-white opacity-60"
+                    [style.left.%]="i * (100 / 9)"
+                  ></div>
+                </ng-container>
+
+                <ng-container *ngFor="let i of [1,2,3,4,5,6,7,8,9,10]; let idx = index">
+                  <div
+                    class="absolute top-full mt-1 text-xs text-gray-500 text-center"
+                    [style.left.%]="idx * (100 / 9)"
+                    style="transform: translateX(-50%); width: 20px"
+                  >
+                    {{ i }}
+                  </div>
+                </ng-container>
+              </div>
+            </div>
+          </div>
+        </ng-container>
+
+        <!-- Интерпретации -->
+        <div class="mt-12 space-y-8">
+          <h4 class="text-lg font-semibold text-gray-800 uppercase border-b border-gray-300 pb-1">
+            Interpretations
+          </h4>
+
+          <div *ngFor="let group of groupByBlock(result.results)">
+            <h5 class="text-base font-semibold text-gray-700 mb-3">{{ group.block }}</h5>
+
+            <div *ngFor="let scale of group.scales" class="flex items-center gap-4 mb-4">
+              <div class="flex gap-1">
+                <ng-container *ngFor="let i of [].constructor(scale.maxLevel); let idx = index">
+                  <div
+                    class="w-4 h-4 border border-gray-400 rounded"
+                    [ngClass]="{
+                      'bg-sky-600': idx + 1 <= scale.level,
+                      'bg-white': idx + 1 > scale.level
+                    }"
+                  ></div>
+                </ng-container>
+              </div>
+
+              <div class="text-sm text-gray-700 italic">
+                {{ scale.interpretation }}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div>
-      <p class="text-sm font-medium text-gray-700 mt-2 mb-1">Оценки по шкалам:</p>
-      <ul class="list-disc list-inside space-y-1 text-sm text-gray-800">
-        <li *ngFor="let r of result.results">
-          <strong>{{ r.scaleName }}:</strong> {{ r.normalized }} ({{ r.interpretation }})
-        </li>
-      </ul>
-    </div>
   </div>
-</div>
 
-<ng-template #noResults>
-  <p class="text-gray-600 italic">No results yet.</p>
-</ng-template>
-
-<!-- Кнопка открытия модалки -->
-<button
-  (click)="openModal()"
-  class="mt-6 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
->
-  + Назначить тест
-</button>
-
-<!-- Модалка -->
-<div
-  *ngIf="isModalOpen"
-  class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
->
-  <div class="bg-white p-6 rounded-xl shadow-lg w-full max-w-md relative">
-    <h2 class="text-xl font-semibold mb-4">Назначить тесты</h2>
-
-    <div *ngFor="let test of tests" class="mb-2">
-      <label class="flex items-center space-x-2">
-        <input
-          type="checkbox"
-          class="accent-blue-500"
-          [checked]="selectedTestIds.includes(test.id!)"
-          (change)="onCheckboxChange($event, test.id!)"
-        />
-        <span class="text-sm">{{ test.title }}</span>
-      </label>
+  <!-- Шаблон если нет результатов -->
+  <ng-template #noResults>
+    <div
+      class="h-[calc(100vh-96px)] flex flex-col items-center justify-center text-center text-gray-600 space-y-6 px-4"
+    >
+      <p class="text-2xl font-bold text-gray-800">
+        No test results found for {{ patientFullName }}
+      </p>
+      <p class="text-sm text-gray-500 max-w-md">
+        Looks like this patient hasn’t taken any tests yet. You can assign a test now to get started.
+      </p>
+      <button
+        (click)="openModal()"
+        class="px-5 py-2.5 bg-sky-600 text-white font-medium rounded-lg hover:bg-sky-700 transition"
+      >
+        + Assign Test
+      </button>
     </div>
+  </ng-template>
 
-    <div class="flex justify-end mt-6 space-x-2">
-      <button
-        (click)="closeModal()"
-        class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 transition"
-      >
-        Cancel
-      </button>
-      <button
-        (click)="saveAssignedTests()"
-        class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-      >
-        Save
-      </button>
+  <!-- Модалка назначения тестов -->
+  <div
+    *ngIf="isModalOpen"
+    class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
+  >
+    <div class="bg-white p-6 rounded-xl shadow-lg w-full max-w-md relative">
+      <h2 class="text-xl font-semibold mb-4">Назначить тесты</h2>
+
+      <div *ngFor="let test of tests" class="mb-2">
+        <label class="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            class="accent-blue-500"
+            [checked]="selectedTestIds.includes(test.id!)"
+            (change)="onCheckboxChange($event, test.id!)"
+          />
+          <span class="text-sm">{{ test.title }}</span>
+        </label>
+      </div>
+
+      <div class="flex justify-end mt-6 space-x-2">
+        <button
+          (click)="closeModal()"
+          class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 transition"
+        >
+          Cancel
+        </button>
+        <button
+          (click)="saveAssignedTests()"
+          class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+        >
+          Save
+        </button>
+      </div>
     </div>
   </div>
 </div>

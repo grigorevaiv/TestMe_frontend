@@ -65,10 +65,16 @@
 
       <button
         class="w-full sm:w-auto bg-sky-700 hover:bg-sky-800 text-white text-sm sm:text-base md:text-lg font-medium px-6 py-2 rounded transition disabled:bg-gray-400 disabled:cursor-not-allowed"
-        (click)="saveTest(true)"
+        (click)="navigate()"
       >
-        Save and proceed →
+        Next →
       </button>
     </div>
   </div>
 </div>
+  <app-confirm-dialog
+    [visible]="confirmNavigationVisible"
+    [message]="confirmNavigationMessage"
+    (confirm)="onConfirmNavigation()"
+    (cancel)="onCancelNavigation()"
+    ></app-confirm-dialog>

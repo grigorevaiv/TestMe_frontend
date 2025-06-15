@@ -1,7 +1,25 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, catchError, forkJoin, map, of, take, tap } from 'rxjs';
+import {
+  BehaviorSubject,
+  Observable,
+  catchError,
+  forkJoin,
+  map,
+  of,
+  take,
+  tap,
+} from 'rxjs';
 import { TestService } from './test.service';
-import { Test, Block, Scale, Question, Answer, Weight, Norm, Interpretation } from '../interfaces/test.interface';
+import {
+  Test,
+  Block,
+  Scale,
+  Question,
+  Answer,
+  Weight,
+  Norm,
+  Interpretation,
+} from '../interfaces/test.interface';
 
 interface FullTestContext {
   test: Test | null;
@@ -13,6 +31,8 @@ interface FullTestContext {
   norms: Norm[] | null;
   interpretations: Interpretation[] | null;
 }
+
+type ContextSection = keyof FullTestContext;
 
 @Injectable({ providedIn: 'root' })
 export class TestContextService {
@@ -36,33 +56,64 @@ export class TestContextService {
     return obs.pipe(catchError(() => of(null)));
   }
 
-  loadContextIfNeeded(testId: number | null, mode: string, force: boolean = false): Observable<FullTestContext> {
-    if (
-      this.contextLoaded &&
-      !force &&
-      this.currentTestId === testId
-    ) {
-      return this.getContext().pipe(take(1));
-    }
+  loadContextIfNeeded(
+    testId: number | null,
+    mode: string,
+    step: number,
+    force: boolean = false
+  ): Observable<FullTestContext> {
+    const stepDependencies: Record<number, ContextSection[]> = {
+      1: ['test'],
+      2: ['test', 'blocks'],
+      3: ['test', 'blocks', 'scales'],
+      4: ['test', 'blocks', 'questions'],
+      5: ['test', 'blocks', 'questions', 'answers'],
+      6: ['test', 'blocks', 'scales', 'questions', 'answers', 'weights'],
+      7: ['test', 'scales', 'norms'],
+      8: ['test', 'scales', 'interpretations'],
+    };
 
-    if (!testId) {
-      const emptyContext: FullTestContext = {
-        test: null,
-        blocks: null,
-        scales: null,
-        questions: null,
-        answers: null,
-        weights: null,
-        norms: null,
-        interpretations: null
-      };
-      this.context$.next(emptyContext);
+    const include = stepDependencies[step] ?? ['test'];
+
+    const defaultEmpty: FullTestContext = {
+      test: null,
+      blocks: null,
+      scales: null,
+      questions: null,
+      answers: null,
+      weights: null,
+      norms: null,
+      interpretations: null,
+    };
+
+    if (!testId || mode === 'new') {
+      this.context$.next(defaultEmpty);
       this.contextLoaded = true;
       this.currentTestId = null;
-      return of(emptyContext);
+      return of(defaultEmpty);
     }
 
-    return forkJoin({
+    if (!force && this.currentTestId === testId) {
+      return this.getContext().pipe(
+        take(1),
+        tap((ctx) => {
+          const missing = include.some((section) => ctx[section] == null);
+          if (!missing) {
+            this.contextLoaded = true;
+          }
+        }),
+        map((ctx) => {
+          const missing = include.some((section) => ctx[section] == null);
+          if (missing) {
+            throw new Error('Context incomplete, reload required');
+          }
+          return ctx;
+        }),
+        catchError(() => this.loadContextIfNeeded(testId, mode, step, true))
+      );
+    }
+
+    const loaders: Partial<Record<ContextSection, Observable<any>>> = {
       test: this.testService.getTestById(testId),
       blocks: this.safe(this.testService.getBlocks(testId)),
       scales: this.safe(this.testService.getScales(testId)),
@@ -71,7 +122,19 @@ export class TestContextService {
       weights: this.safe(this.testService.getWeights(testId)),
       norms: this.safe(this.testService.getNorms(testId)),
       interpretations: this.safe(this.testService.getInterpretations(testId)),
-    }).pipe(
+    };
+
+    const selectedLoaders: Partial<Record<ContextSection, Observable<any>>> =
+      {};
+    for (const key of include) {
+      selectedLoaders[key] = loaders[key]!;
+    }
+
+    return forkJoin(selectedLoaders).pipe(
+      map((partial: Partial<FullTestContext>) => ({
+        ...defaultEmpty,
+        ...partial,
+      })),
       tap((ctx) => {
         this.context$.next(ctx);
         this.contextLoaded = true;
@@ -79,49 +142,55 @@ export class TestContextService {
       })
     );
   }
-  
-  ensureContext(testId: number | null, mode: string): Observable<FullTestContext> {
-    return this.loadContextIfNeeded(testId, mode, false);
-  }
 
-  isContextLoaded(): boolean {
-    return this.contextLoaded;
+  ensureContext(
+    testId: number | null,
+    mode: string,
+    step: number
+  ): Observable<FullTestContext> {
+    return this.loadContextIfNeeded(testId, mode, step, false);
   }
 
   getContext(): Observable<FullTestContext> {
     return this.context$.asObservable();
   }
 
+  getTest(): Observable<Test | null> {
+    return this.context$.pipe(map((ctx) => ctx.test));
+  }
+
   getBlocks(): Observable<Block[] | null> {
-    return this.context$.pipe(map(ctx => ctx.blocks));
+    return this.context$.pipe(map((ctx) => ctx.blocks));
   }
 
   getScales(): Observable<Scale[] | null> {
-    return this.context$.pipe(map(ctx => ctx.scales));
+    return this.context$.pipe(map((ctx) => ctx.scales));
   }
 
   getQuestions(): Observable<Question[] | null> {
-    return this.context$.pipe(map(ctx => ctx.questions));
+    return this.context$.pipe(map((ctx) => ctx.questions));
   }
 
   getAnswers(): Observable<Answer[] | null> {
-    return this.context$.pipe(map(ctx => ctx.answers));
+    return this.context$.pipe(map((ctx) => ctx.answers));
   }
 
   getWeights(): Observable<Weight[] | null> {
-    return this.context$.pipe(map(ctx => ctx.weights));
+    return this.context$.pipe(map((ctx) => ctx.weights));
   }
 
   getNorms(): Observable<Norm[] | null> {
-    return this.context$.pipe(map(ctx => ctx.norms));
+    return this.context$.pipe(map((ctx) => ctx.norms));
   }
 
   getInterpretations(): Observable<Interpretation[] | null> {
-    return this.context$.pipe(map(ctx => ctx.interpretations));
+    return this.context$.pipe(map((ctx) => ctx.interpretations));
   }
 
-  getTest(): Observable<Test | null> {
-    return this.context$.pipe(map(ctx => ctx.test));
+  getContextSection<K extends ContextSection>(
+    key: K
+  ): Observable<FullTestContext[K]> {
+    return this.context$.pipe(map((ctx) => ctx[key]));
   }
 
   resetContext(): void {
@@ -133,12 +202,9 @@ export class TestContextService {
       answers: null,
       weights: null,
       norms: null,
-      interpretations: null
+      interpretations: null,
     });
     this.contextLoaded = false;
     this.currentTestId = null;
   }
-
-
 }
-

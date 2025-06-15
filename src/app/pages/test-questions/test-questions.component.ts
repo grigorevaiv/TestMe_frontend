@@ -1,14 +1,27 @@
-import { Component, effect, ElementRef, inject, QueryList, ViewChildren } from '@angular/core';
+import {
+  Component,
+  effect,
+  ElementRef,
+  inject,
+  QueryList,
+  ViewChildren,
+} from '@angular/core';
 import { ResourceService } from '../../services/resource.service';
 //import { CacheService } from '../../services/cache.service';
 import { Block, Question } from '../../interfaces/test.interface';
-import { FormArray, FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  FormArray,
+  FormBuilder,
+  FormGroup,
+  ReactiveFormsModule,
+  Validators,
+} from '@angular/forms';
 import { TestService } from '../../services/test.service';
 import { firstValueFrom } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ValidationService } from '../../services/validation.service';
 import { ViewChild } from '@angular/core';
-import { QuestionSelectorComponent } from "../../components/question-selector/question-selector.component";
+import { QuestionSelectorComponent } from '../../components/question-selector/question-selector.component';
 import { SentencecasePipe } from '../../pipes/sentencecase.pipe';
 import { NgClass, NgIf } from '@angular/common';
 import { ToastService } from '../../services/toast.service';
@@ -17,14 +30,22 @@ import { ProgressBarComponent } from '../../components/progress-bar/progress-bar
 import { stepRoutes } from '../../constants/step-routes';
 import { ConfirmDialogComponent } from '../../components/confirm-dialog/confirm-dialog.component';
 import { TestContextService } from '../../services/test-context.service';
+import { StepRedirectService } from '../../services/step-redirect.service';
 
 @Component({
   selector: 'app-test-questions',
-  imports: [ReactiveFormsModule, SentencecasePipe, QuestionSelectorComponent, NgClass, ProgressBarComponent, ConfirmDialogComponent, NgIf],
+  imports: [
+    ReactiveFormsModule,
+    SentencecasePipe,
+    QuestionSelectorComponent,
+    NgClass,
+    ProgressBarComponent,
+    ConfirmDialogComponent,
+    NgIf,
+  ],
   templateUrl: './test-questions.component.html',
-  styleUrl: './test-questions.component.css'
+  styleUrl: './test-questions.component.css',
 })
-
 export class TestQuestionsComponent {
   private fb = inject(FormBuilder);
   private route = inject(ActivatedRoute);
@@ -35,6 +56,7 @@ export class TestQuestionsComponent {
   testService = inject(TestService);
   toast = inject(ToastService);
   private testContextService = inject(TestContextService);
+  stepRedirectService = inject(StepRedirectService);
 
   testId: number | null = null;
   testState: any;
@@ -43,7 +65,8 @@ export class TestQuestionsComponent {
   mode: string = '';
   step: number = 4;
   questionsOfBlock: { [blockId: number]: FormArray<FormGroup> } = {};
-  imagePreviews: { [blockId: number]: { [questionIndex: number]: string } } = {};
+  imagePreviews: { [blockId: number]: { [questionIndex: number]: string } } =
+    {};
   isQuestionsModified: { [blockId: number]: boolean } = {};
   questionsToDelete: number[] = [];
   isEditMode = false;
@@ -57,6 +80,17 @@ export class TestQuestionsComponent {
     const storedId = this.sessionStorage.getTestId();
     const id = idParam ? Number(idParam) : storedId;
 
+    if (id) {
+      const redirected =
+        await this.stepRedirectService.redirectIfStepAlreadyCompleted(
+          mode,
+          id,
+          4,
+          (id) => ['/test-questions/edit', id]
+        );
+      if (redirected) return;
+    }
+
     if (!id) {
       console.warn('[TestQuestionsComponent] No test ID found');
       return;
@@ -67,81 +101,87 @@ export class TestQuestionsComponent {
     this.isEditMode = this.mode !== 'new';
     this.sessionStorage.setTestId(id);
 
-    await firstValueFrom(this.testContextService.ensureContext(this.testId, this.mode));
+    await firstValueFrom(
+      this.testContextService.ensureContext(this.testId, this.mode, 4)
+    );
 
-    this.testContextService.getTest().subscribe(test => {
+    this.testContextService.getTest().subscribe((test) => {
       this.testState = test?.state ?? null;
     });
 
-    this.testContextService.getBlocks().subscribe(blocks => {
+    this.testContextService.getBlocks().subscribe((blocks) => {
       this.blocks = blocks || [];
     });
 
-    this.testContextService.getQuestions().subscribe(questions => {
+    this.testContextService.getQuestions().subscribe((questions) => {
       this.questions = questions || [];
     });
 
     this.initializeQuestionsForms();
+    window.addEventListener('beforeunload', this.beforeUnloadHandler);
   }
-
 
   addQuestionToBlock(block: Block) {
     const formArray = this.questionsOfBlock[block.id!];
 
     if (formArray) {
-
       const newQuestionForm = this.createQuestionForm(block);
       formArray.push(newQuestionForm);
-      block.numberOfQuestions = block.numberOfQuestions ? block.numberOfQuestions + 1 : 1;
+      block.numberOfQuestions = block.numberOfQuestions
+        ? block.numberOfQuestions + 1
+        : 1;
       this.isQuestionsModified[block.id!] = true;
       console.log('A question has been added to block', block.id);
-      console.log('Updated number of questions in block', block.numberOfQuestions);
-
+      console.log(
+        'Updated number of questions in block',
+        block.numberOfQuestions
+      );
     } else {
       console.warn('FormArray not found for the block', block.id);
     }
   }
 
-removeQuestionFromBlock(blockId: number, index: number) {
-  const formArray = this.questionsOfBlock[blockId];
+  removeQuestionFromBlock(blockId: number, index: number) {
+    const formArray = this.questionsOfBlock[blockId];
 
-  if (formArray && formArray.length > 1) {
-    const controlToRemove = formArray.at(index);
-    const removedId = controlToRemove?.get('id')?.value;
+    if (formArray && formArray.length > 1) {
+      const controlToRemove = formArray.at(index);
+      const removedId = controlToRemove?.get('id')?.value;
 
-    console.log('Удаляем вопрос с ID:', removedId);
+      console.log('Удаляем вопрос с ID:', removedId);
 
-    if (removedId) {
-      this.questionsToDelete.push(removedId);
-    }
-
-    formArray.removeAt(index);
-    this.isQuestionsModified[blockId] = true;
-  }
-}
-
-initializeQuestionsForms() {
-  this.questionsOfBlock = {};
-  const lastQuestionOfTest = this.questions[this.questions.length - 1];
-  this.blocks.forEach((block) => {
-    const formArray = this.fb.array<FormGroup>([]);
-    const blockQuestions = this.questions.filter(q => q.blockId === block.id);
-
-    if (blockQuestions.length > 0) {
-      blockQuestions.forEach(question => {
-        formArray.push(this.createQuestionForm(block, question));
-      });
-    } else {
-      for (let i = 0; i < block.numberOfQuestions!; i++) {
-        formArray.push(this.createQuestionForm(block));
+      if (removedId) {
+        this.questionsToDelete.push(removedId);
       }
-      this.isQuestionsModified[block.id!] = false;
+
+      formArray.removeAt(index);
+      this.isQuestionsModified[blockId] = true;
     }
+  }
 
-    this.questionsOfBlock[block.id!] = formArray;
-  });
-}
+  initializeQuestionsForms() {
+    this.questionsOfBlock = {};
+    const lastQuestionOfTest = this.questions[this.questions.length - 1];
+    this.blocks.forEach((block) => {
+      const formArray = this.fb.array<FormGroup>([]);
+      const blockQuestions = this.questions.filter(
+        (q) => q.blockId === block.id
+      );
 
+      if (blockQuestions.length > 0) {
+        blockQuestions.forEach((question) => {
+          formArray.push(this.createQuestionForm(block, question));
+        });
+      } else {
+        for (let i = 0; i < block.numberOfQuestions!; i++) {
+          formArray.push(this.createQuestionForm(block));
+        }
+        this.isQuestionsModified[block.id!] = false;
+      }
+
+      this.questionsOfBlock[block.id!] = formArray;
+    });
+  }
 
   createQuestionForm(block: Block, question?: Question): FormGroup {
     const form = this.fb.group({
@@ -152,7 +192,7 @@ initializeQuestionsForms() {
       hasImage: [!!question?.imageUrl],
       isUploadingImage: [false],
       isCloned: [question?.id ? false : true],
-      realId: [question?.realId ?? question?.id ?? null]
+      realId: [question?.realId ?? question?.id ?? null],
     });
 
     if (form.get('hasImage')?.value) {
@@ -161,7 +201,6 @@ initializeQuestionsForms() {
     form.get('imageUrl')?.updateValueAndValidity();
     return form;
   }
-
 
   getQuestionsFormsForBlock(blockId: number): FormArray<FormGroup> {
     return this.questionsOfBlock[blockId];
@@ -172,7 +211,8 @@ initializeQuestionsForms() {
   }
 
   async onImageSelected(event: Event, blockId: number, questionIndex: number) {
-    const questionForm = this.getQuestionsFormsForBlock(blockId).at(questionIndex);
+    const questionForm =
+      this.getQuestionsFormsForBlock(blockId).at(questionIndex);
     questionForm.patchValue({ isUploadingImage: true });
 
     const input = event.target as HTMLInputElement;
@@ -202,29 +242,60 @@ initializeQuestionsForms() {
           isUploadingImage: false,
           hasImage: false,
         });
-      }
+      },
     });
   }
 
+  async saveAllQuestions(newQuestions?: Question[]) {
+    if (!this.testId) {
+      console.error('Missing testId');
+      return;
+    }
 
-async saveAllQuestions(newQuestions?: Question[]) {
-  if (!this.testId) {
-    console.error('Missing testId');
-    return;
-  }
+    let payload: Question[] = [];
 
-  let payload: Question[] = [];
+    if (newQuestions) {
+      payload = newQuestions;
+      console.log('New questions to save:', payload);
+      for (const block of this.blocks) {
+        const relatedQuestions = newQuestions.filter(
+          (q) => q.blockId === block.id
+        );
+        const currentFormArray = this.questionsOfBlock[block.id!];
 
-  if (newQuestions) {
-    payload = newQuestions;
-    console.log('New questions to save:', payload);
-    for (const block of this.blocks) {
-      const relatedQuestions = newQuestions.filter(q => q.blockId === block.id);
-      const currentFormArray = this.questionsOfBlock[block.id!];
+        if (relatedQuestions.length > 0) {
+          block.numberOfQuestions = currentFormArray.length;
 
-      if (relatedQuestions.length > 0) {
-        block.numberOfQuestions = currentFormArray.length;
+          try {
+            const updatedBlock = await firstValueFrom(
+              this.testService.updateBlock(this.testId!, block.id!, block)
+            );
+            console.log('Block updated:', updatedBlock);
+          } catch (err) {
+            console.error('Failed to update block:', err);
+          }
+        }
+      }
+    } else {
+      for (const [blockId, formArray] of Object.entries(
+        this.questionsOfBlock
+      )) {
+        const block = this.blocks.find((b) => b.id === +blockId)!;
 
+        block.numberOfQuestions = formArray.length;
+
+        for (const form of formArray.controls) {
+          const value = form.value;
+          payload.push({
+            text: value.text,
+            imageUrl: value.imageUrl || null,
+            isActive: value.isActive,
+            blockId: block.id!,
+          });
+        }
+      }
+
+      for (const block of this.blocks) {
         try {
           const updatedBlock = await firstValueFrom(
             this.testService.updateBlock(this.testId!, block.id!, block)
@@ -235,47 +306,16 @@ async saveAllQuestions(newQuestions?: Question[]) {
         }
       }
     }
-  } else {
 
-    for (const [blockId, formArray] of Object.entries(this.questionsOfBlock)) {
-      const block = this.blocks.find(b => b.id === +blockId)!;
-
-      block.numberOfQuestions = formArray.length;
-
-      for (const form of formArray.controls) {
-        const value = form.value;
-        payload.push({
-          text: value.text,
-          imageUrl: value.imageUrl || null,
-          isActive: value.isActive,
-          blockId: block.id!,
-        });
-      }
-    }
-
-    for (const block of this.blocks) {
-      try {
-        const updatedBlock = await firstValueFrom(
-          this.testService.updateBlock(this.testId!, block.id!, block)
-        );
-        console.log('Block updated:', updatedBlock);
-      } catch (err) {
-        console.error('Failed to update block:', err);
-      }
+    try {
+      const response = await firstValueFrom(
+        this.testService.saveQuestionsBatch(this.testId, payload)
+      );
+      this.resourceService.triggerRefresh();
+    } catch (error) {
+      console.error('Error saving questions:', error);
     }
   }
-
-  try {
-    const response = await firstValueFrom(
-      this.testService.saveQuestionsBatch(this.testId, payload)
-    );
-    console.log('Questions saved successfully:', response);
-    this.toast.show({ message: 'Questions saved successfully', type: 'success' });
-    this.resourceService.triggerRefresh();
-  } catch (error) {
-    console.error('Error saving questions:', error);
-  }
-}
 
   async updateQuestions() {
     if (!this.testId) {
@@ -286,9 +326,11 @@ async saveAllQuestions(newQuestions?: Question[]) {
     const payloadToUpdate: Question[] = [];
     const payloadToCreate: Question[] = [];
 
-    for (const [blockIdStr, formArray] of Object.entries(this.questionsOfBlock)) {
+    for (const [blockIdStr, formArray] of Object.entries(
+      this.questionsOfBlock
+    )) {
       const blockId = +blockIdStr;
-      const block = this.blocks.find(b => b.id === blockId)!;
+      const block = this.blocks.find((b) => b.id === blockId)!;
 
       block.numberOfQuestions = formArray.length;
 
@@ -302,7 +344,12 @@ async saveAllQuestions(newQuestions?: Question[]) {
         };
 
         if (value.id && !value.isCloned) {
-          console.log('Updating question', value.id, 'with imageUrl:', questionData.imageUrl);
+          console.log(
+            'Updating question',
+            value.id,
+            'with imageUrl:',
+            questionData.imageUrl
+          );
           questionData.id = value.id;
           payloadToUpdate.push(questionData);
         } else {
@@ -313,20 +360,28 @@ async saveAllQuestions(newQuestions?: Question[]) {
 
     try {
       if (this.questionsToDelete?.length > 0) {
-        await firstValueFrom(this.testService.deleteQuestions(this.questionsToDelete));
+        await firstValueFrom(
+          this.testService.deleteQuestions(this.questionsToDelete)
+        );
         console.log('Deleted questions:', this.questionsToDelete);
         this.questionsToDelete = [];
       }
       for (const block of this.blocks) {
-        await firstValueFrom(this.testService.updateBlock(this.testId, block.id!, block));
+        await firstValueFrom(
+          this.testService.updateBlock(this.testId, block.id!, block)
+        );
         console.log('Block updated:', block);
       }
       if (payloadToUpdate.length > 0) {
-        await firstValueFrom(this.testService.updateQuestions(this.testId, payloadToUpdate));
+        await firstValueFrom(
+          this.testService.updateQuestions(this.testId, payloadToUpdate)
+        );
         console.log('Questions updated successfully:', payloadToUpdate);
       }
       if (payloadToCreate.length > 0) {
-        await firstValueFrom(this.testService.saveQuestionsBatch(this.testId, payloadToCreate));
+        await firstValueFrom(
+          this.testService.saveQuestionsBatch(this.testId, payloadToCreate)
+        );
         console.log('New questions saved successfully:', payloadToCreate);
       }
       this.resourceService.triggerRefresh();
@@ -344,7 +399,7 @@ async saveAllQuestions(newQuestions?: Question[]) {
       event.preventDefault();
       event.returnValue = '';
     }
-  }
+  };
 
   hasUnsavedChanges(): boolean {
     for (const formArray of Object.values(this.questionsOfBlock)) {
@@ -357,39 +412,44 @@ async saveAllQuestions(newQuestions?: Question[]) {
     return false;
   }
 
+  async deleteImage(blockId: number, questionIndex: number) {
+    console.log(
+      'Deleting image for block:',
+      blockId,
+      'question index:',
+      questionIndex
+    );
 
-    async deleteImage(blockId: number, questionIndex: number) {
-      console.log('Deleting image for block:', blockId, 'question index:', questionIndex);
+    const questionForm =
+      this.getQuestionsFormsForBlock(blockId).at(questionIndex);
+    const imageUrl = questionForm.get('imageUrl')?.value;
+    const questionId = questionForm.get('id')?.value;
 
-      const questionForm = this.getQuestionsFormsForBlock(blockId).at(questionIndex);
-      const imageUrl = questionForm.get('imageUrl')?.value;
-      const questionId = questionForm.get('id')?.value;
+    if (!imageUrl) return;
 
-      if (!imageUrl) return;
+    const isTemp = imageUrl.includes('tmp/');
 
-      const isTemp = imageUrl.includes('tmp/');
-
-      if (!isTemp && questionId) {
-        this.testService.deleteImage(imageUrl, questionId).subscribe(
-          (res) => console.log('Deleted from server & DB:', res),
-          (err) => console.error('Error deleting:', err)
-        );
-      }
-
-      questionForm.patchValue({
-        imageUrl: '',
-        hasImage: false,
-        isUploadingImage: false,
-      });
-
-      if (this.imagePreviews[blockId]?.[questionIndex]) {
-        const updated = { ...this.imagePreviews[blockId] };
-        delete updated[questionIndex];
-        this.imagePreviews[blockId] = { ...updated };
-      }
-      this.onToggleHasImage(blockId, questionIndex);
-      console.log('Image removed from form and previews.');
+    if (!isTemp && questionId) {
+      this.testService.deleteImage(imageUrl, questionId).subscribe(
+        (res) => console.log('Deleted from server & DB:', res),
+        (err) => console.error('Error deleting:', err)
+      );
     }
+
+    questionForm.patchValue({
+      imageUrl: '',
+      hasImage: false,
+      isUploadingImage: false,
+    });
+
+    if (this.imagePreviews[blockId]?.[questionIndex]) {
+      const updated = { ...this.imagePreviews[blockId] };
+      delete updated[questionIndex];
+      this.imagePreviews[blockId] = { ...updated };
+    }
+    this.onToggleHasImage(blockId, questionIndex);
+    console.log('Image removed from form and previews.');
+  }
 
   zoomedImageUrl: string | null = null;
 
@@ -425,10 +485,14 @@ async saveAllQuestions(newQuestions?: Question[]) {
     }
 
     imageUrlControl?.updateValueAndValidity();
-    
   }
 
-  async saveTest(navigate: boolean = false): Promise<void> {
+  confirmNavigationVisible = false;
+  confirmNavigationMessage =
+    'Are you sure you want to proceed? All unsaved changes will be lost';
+  pendingStep: number | null = null;
+
+  async saveTest(): Promise<void> {
     if (!this.testState) return;
 
     if (this.hasInvalidQuestions()) {
@@ -443,12 +507,17 @@ async saveAllQuestions(newQuestions?: Question[]) {
     if (!this.questions || this.questions.length === 0) {
       this.markAllQuestionsAsTouched();
       await this.saveAllQuestions();
-      console.log('New questions saved successfully');
-      this.toast.show({message: 'Questions saved successfully', type: 'success'});
+      this.toast.show({
+        message: 'Questions saved successfully',
+        type: 'success',
+      });
       this.resourceService.triggerRefresh();
     } else {
       this.updateQuestions();
-      this.toast.show({message: 'Questions updated successfully', type: 'success'});
+      this.toast.show({
+        message: 'Questions updated successfully',
+        type: 'success',
+      });
       this.resourceService.triggerRefresh();
     }
 
@@ -458,33 +527,70 @@ async saveAllQuestions(newQuestions?: Question[]) {
       targetState = await firstValueFrom(
         this.testService.updateTestStateStep(this.testId!, this.testState)
       );
-      console.log('Test state updated to step 4:', targetState);
-      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId!, 'edit', true));
+      await firstValueFrom(
+        this.testContextService.loadContextIfNeeded(this.testId!, 'edit', 4, true)
+      );
       this.router.navigate(['/test-questions/edit', this.testId]);
-    }
-
-    if (navigate) {
-      this.handleNavigation(targetState);
     }
   }
 
-  private handleNavigation(testState: any) {
-    const step = testState.currentStep;
-    if (step === 4) {
-      this.toast.show({
-        message: 'Going to next step...',
-        type: 'info',
-      });
-      setTimeout(() => {
-        this.router.navigate(['/test-answers/new']);
-      }, 700);
-    } else if (step > 4) {
-      if (!this.testId) {
-        console.error('Cannot navigate to edit: testId is missing');
-        return;
-      }
-      this.router.navigate(['/test-scales/answers/', this.testId]);
+  navigate() {
+    const unsaved = this.hasUnsavedChanges();
+    if (unsaved && this.mode === 'edit') {
+      this.pendingStep = (this.testState?.currentStep ?? 1) + 1;
+      this.confirmNavigationVisible = true;
+      return;
     }
+
+    if (unsaved) {
+      this.toast.show({
+        message: 'Please save changes before proceeding',
+        type: 'warning',
+      });
+      return;
+    }
+
+    this.toast.show({ message: 'Going to next step...', type: 'info' });
+
+    setTimeout(() => {
+      const route =
+        this.testState?.currentStep === 4
+          ? ['/test-answers/new']
+          : ['/test-answers/edit', this.testId];
+      this.router.navigate(route);
+    }, 700);
+  }
+
+  onStepSelected(step: number): void {
+    if (this.hasUnsavedChanges()) {
+      this.pendingStep = step;
+      this.confirmNavigationVisible = true;
+      return;
+    }
+
+    this.navigateToStep(step);
+  }
+
+  onConfirmNavigation(): void {
+    if (this.pendingStep !== null) {
+      this.navigateToStep(this.pendingStep);
+    }
+    this.resetNavigationState();
+  }
+
+  navigateToStep(step: number): void {
+    const id = this.testId || this.sessionStorage.getTestId();
+    if (!id || !stepRoutes[step]) return;
+    this.router.navigate(stepRoutes[step](id));
+  }
+
+  resetNavigationState(): void {
+    this.confirmNavigationVisible = false;
+    this.pendingStep = null;
+  }
+
+  onCancelNavigation(): void {
+    this.resetNavigationState();
   }
 
   hasInvalidQuestions(): boolean {
@@ -498,14 +604,19 @@ async saveAllQuestions(newQuestions?: Question[]) {
     return false;
   }
 
-  getError(field: string, blockId: number, questionIndex: number): string | null {
+  getError(
+    field: string,
+    blockId: number,
+    questionIndex: number
+  ): string | null {
     const formArray = this.getQuestionsFormsForBlock(blockId);
     if (!formArray || questionIndex >= formArray.length) return null;
 
     const control = formArray.at(questionIndex)?.get(field);
-    return control && control.touched ? this.validationService.getErrorMessage(control, field) : null;
+    return control && control.touched
+      ? this.validationService.getErrorMessage(control, field)
+      : null;
   }
-
 
   markAllQuestionsAsTouched() {
     for (const formArray of Object.values(this.questionsOfBlock)) {
@@ -532,159 +643,104 @@ async saveAllQuestions(newQuestions?: Question[]) {
     }, 0);
   }
 
-
   handleQuestionSelection(question: Question) {
-  for (let i = 0; i < this.blocks.length; i++) {
-    const block = this.blocks[i];
-    const formArray = this.questionsOfBlock[block.id!];
+    for (let i = 0; i < this.blocks.length; i++) {
+      const block = this.blocks[i];
+      const formArray = this.questionsOfBlock[block.id!];
 
-    if (!formArray || formArray.length === 0) continue;
+      if (!formArray || formArray.length === 0) continue;
 
-    const emptyForm = formArray.controls.find(ctrl =>
-      !ctrl.get('text')?.value?.trim()
-    );
+      const emptyForm = formArray.controls.find(
+        (ctrl) => !ctrl.get('text')?.value?.trim()
+      );
 
-    if (emptyForm) {
-      emptyForm.patchValue({
-        text: question.text,
-        isActive: true,
-        imageUrl: question.imageUrl || '',
-        hasImage: !!question.imageUrl,
-      });
-      return;
+      if (emptyForm) {
+        emptyForm.patchValue({
+          text: question.text,
+          isActive: true,
+          imageUrl: question.imageUrl || '',
+          hasImage: !!question.imageUrl,
+        });
+        return;
+      }
     }
-  }
-  console.warn('All blocks are full, cannot add question:', question.text);
-}
-
-onDragOver(event: DragEvent) {
-  event.preventDefault(); 
-}
-
-/*onDrop(event: DragEvent, blockId: number, formIndex: number) {
-  event.preventDefault();
-  const raw = event.dataTransfer?.getData('application/json');
-  if (!raw) return;
-
-  const droppedQuestion: Question = JSON.parse(raw);
-  console.log('Dropping question with realId:', droppedQuestion.id);
-
-
-  const formArray = this.questionsOfBlock[blockId];
-  const form = formArray?.at(formIndex);
-
-  if (!form) {
-    console.warn(`Form with index ${formIndex} is not found ${blockId}`);
-    return;
+    console.warn('All blocks are full, cannot add question:', question.text);
   }
 
-  const existingText = form.get('text')?.value?.trim();
-  const existingImage = form.get('imageUrl')?.value;
-  const existingHasImage = form.get('hasImage')?.value;
-  const existingId = form.get('id')?.value;
-  const existingRealId = form.get('realId')?.value;
+  onDragOver(event: DragEvent) {
+    event.preventDefault();
+  }
 
-  if (existingText || existingImage) {
-  const existingQuestion: Question = {
-    id: existingId,
-    realId: existingRealId,
-    text: existingText,
-    imageUrl: existingImage || '',
-    isActive: true,
-    hasImage: !!existingImage || existingHasImage,
-    blockId: 0,
-  };
+  onDrop(event: DragEvent, blockId: number, formIndex: number) {
+    event.preventDefault();
+    const raw = event.dataTransfer?.getData('application/json');
+    if (!raw) return;
+
+    const droppedQuestion: Question = JSON.parse(raw);
+    const formArray = this.questionsOfBlock[blockId];
+    const form = formArray?.at(formIndex);
+    if (!form) return;
+
+    const existingId = form.get('id')?.value;
+    const existingText = form.get('text')?.value?.trim();
+    const existingImage = form.get('imageUrl')?.value;
+    const existingHasImage = form.get('hasImage')?.value;
+    const existingRealId = form.get('realId')?.value;
+
+    const isOccupied = !!existingText || !!existingImage;
+
+    if (isOccupied && this.isEditMode) {
+      console.warn('Replacing existing question:', existingText);
+      const existingQuestion: Question = {
+        id: existingId,
+        realId: existingRealId,
+        text: existingText,
+        imageUrl: existingImage || '',
+        isActive: true,
+        hasImage: !!existingImage || existingHasImage,
+        blockId: blockId,
+      };
       this.selectorComponent?.restoreQuestion(existingQuestion);
     }
 
-    const tempId = `temp-${Date.now()}-${Math.random()}`;
-
     form.patchValue({
-      id: tempId,
+      id: existingId ?? null,
       realId: droppedQuestion.id,
       text: droppedQuestion.text,
       imageUrl: droppedQuestion.imageUrl || '',
       isActive: true,
       hasImage: !!droppedQuestion.imageUrl,
-      isCloned: true
+      isCloned: form.get('id')?.value ? false : true,
     });
 
     this.selectorComponent?.removeQuestion?.(droppedQuestion.id!);
   }
-*/
 
-onDrop(event: DragEvent, blockId: number, formIndex: number) {
-  event.preventDefault();
-  const raw = event.dataTransfer?.getData('application/json');
-  if (!raw) return;
+  showSelector = false;
 
-  const droppedQuestion: Question = JSON.parse(raw);
-  const formArray = this.questionsOfBlock[blockId];
-  const form = formArray?.at(formIndex);
-  if (!form) return;
-
-  const existingText = form.get('text')?.value?.trim();
-  const existingImage = form.get('imageUrl')?.value;
-  const existingHasImage = form.get('hasImage')?.value;
-  const existingId = form.get('id')?.value;
-  const existingRealId = form.get('realId')?.value;
-
-  const isOccupied = !!existingText || !!existingImage;
-
-  if (isOccupied && this.isEditMode) {
-    console.warn('Replacing existing question:', existingText);
-    const existingQuestion: Question = {
-      id: existingId,
-      realId: existingRealId,
-      text: existingText,
-      imageUrl: existingImage || '',
-      isActive: true,
-      hasImage: !!existingImage || existingHasImage,
-      blockId: blockId,
-    };
-    this.selectorComponent?.restoreQuestion(existingQuestion);
+  toggleSelector() {
+    this.showSelector = !this.showSelector;
   }
 
-  const tempId = `temp-${Date.now()}-${Math.random()}`;
+  onQuestionEdit(blockId: number, index: number) {
+    const form = this.questionsOfBlock[blockId]?.at(index);
+    if (!form) return;
 
-  form.patchValue({
-    id: tempId,
-    realId: droppedQuestion.id,
-    text: droppedQuestion.text,
-    imageUrl: droppedQuestion.imageUrl || '',
-    isActive: true,
-    hasImage: !!droppedQuestion.imageUrl,
-    isCloned: true,
-  });
+    const realId = form.get('realId')?.value;
+    if (!realId) return;
 
-  this.selectorComponent?.removeQuestion?.(droppedQuestion.id!);
-}
+    const editedQuestion: Question = {
+      id: undefined,
+      text: form.get('text')?.value,
+      imageUrl: form.get('imageUrl')?.value || '',
+      isActive: form.get('isActive')?.value,
+      blockId: 0,
+      realId: realId,
+    };
 
-showSelector = false;
-
-toggleSelector() {
-  this.showSelector = !this.showSelector;
-}
-
-onQuestionEdit(blockId: number, index: number) {
-  const form = this.questionsOfBlock[blockId]?.at(index);
-  if (!form) return;
-
-  const realId = form.get('realId')?.value;
-  if (!realId) return;
-
-  const editedQuestion: Question = {
-    id: undefined,
-    text: form.get('text')?.value,
-    imageUrl: form.get('imageUrl')?.value || '',
-    isActive: form.get('isActive')?.value,
-    blockId: 0,
-    realId: realId
-  };
-
-  this.selectorComponent?.restoreQuestion(editedQuestion);
-  form.patchValue({ realId: null });
-}
+    this.selectorComponent?.restoreQuestion(editedQuestion);
+    form.patchValue({ realId: null });
+  }
 
   get completedStepsArray(): number[] {
     if (!this.testState || !this.testState.currentStep) {
@@ -694,30 +750,31 @@ onQuestionEdit(blockId: number, index: number) {
     return Array.from({ length: this.testState.currentStep }, (_, i) => i + 1);
   }
 
-  onStepSelected(step: number) {
-    const id = this.testId || this.sessionStorage.getTestId(); 
-    if (!id || !stepRoutes[step]) return;
-    this.router.navigate(stepRoutes[step](id));
-  }
-
-
   confirmDialogVisible = false;
   confirmDialogMessage = 'Are you sure you want to delete this question?';
-
 
   pendingDeleteBlockId: number | null = null;
   pendingDeleteQuestionIndex: number | null = null;
 
   askDeleteConfirmation(blockId: number, index: number) {
-  this.pendingDeleteBlockId = blockId;
-  this.pendingDeleteQuestionIndex = index;
-  this.confirmDialogVisible = true;
-}
+    this.pendingDeleteBlockId = blockId;
+    this.pendingDeleteQuestionIndex = index;
+    this.confirmDialogVisible = true;
+  }
 
   onConfirmDelete() {
-    if (this.pendingDeleteBlockId !== null && this.pendingDeleteQuestionIndex !== null) {
-      this.removeQuestionFromBlock(this.pendingDeleteBlockId, this.pendingDeleteQuestionIndex);
-      this.toast.show({message: 'Question deleted successfully', type: 'success'});
+    if (
+      this.pendingDeleteBlockId !== null &&
+      this.pendingDeleteQuestionIndex !== null
+    ) {
+      this.removeQuestionFromBlock(
+        this.pendingDeleteBlockId,
+        this.pendingDeleteQuestionIndex
+      );
+      this.toast.show({
+        message: 'Question deleted successfully',
+        type: 'success',
+      });
     }
     this.resetDeleteState();
   }
@@ -733,7 +790,4 @@ onQuestionEdit(blockId: number, index: number) {
   }
 
   @ViewChildren('questionRef') questionRefs!: QueryList<ElementRef>;
-
-
 }
-

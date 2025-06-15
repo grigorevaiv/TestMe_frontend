@@ -52,20 +52,19 @@ export class QuestionSelectorComponent {
     });
   }
 
-onQuestionSelect(question: QuestionWithTags) {
-  const { id, text, imageUrl, isActive, blockId } = question;
-  this.selectQuestion.emit({ id, text, imageUrl, isActive, blockId }); // чистый Question
+  onQuestionSelect(question: QuestionWithTags) {
+    const { id, text, imageUrl, isActive, blockId } = question;
+    this.selectQuestion.emit({ id, text, imageUrl, isActive, blockId }); // чистый Question
 
-  this.questions = this.questions.filter(q => q.id !== id);
-  this.filteredQuestions = this.filteredQuestions.filter(q => q.id !== id);
-}
+    this.questions = this.questions.filter(q => q.id !== id);
+    this.filteredQuestions = this.filteredQuestions.filter(q => q.id !== id);
+  }
 
-onDragStart(event: DragEvent, question: QuestionWithTags) {
-  const { id, text, imageUrl, isActive, blockId } = question;
-  const pureQuestion: Question = { id, text, imageUrl, isActive, blockId };
-
-  event.dataTransfer?.setData('application/json', JSON.stringify(pureQuestion));
-}
+  onDragStart(event: DragEvent, question: QuestionWithTags) {
+    const { id, text, imageUrl, isActive, blockId } = question;
+    const pureQuestion: Question = { id, text, imageUrl, isActive, blockId };
+    event.dataTransfer?.setData('application/json', JSON.stringify(pureQuestion));
+  }
 
 
   removeQuestion(id: number) {
@@ -73,27 +72,25 @@ onDragStart(event: DragEvent, question: QuestionWithTags) {
     this.applyFilters();
   }
 
-restoreQuestion(question: Question) {
-  const realId = typeof question.realId === 'string' ? parseInt(question.realId, 10) : question.realId;
+  restoreQuestion(question: Question) {
+    const realId = typeof question.realId === 'string' ? parseInt(question.realId, 10) : question.realId;
 
-  console.log('Trying to restore question with realId:', realId);
+    console.log('Trying to restore question with realId:', realId);
 
-  const all = this.resourceService.allQuestionsResource.value() as QuestionWithTags[];
-  const fullQuestion = all.find(q => q.id === realId);
-  console.log('Full question found:', fullQuestion);
+    const all = this.resourceService.allQuestionsResource.value() as QuestionWithTags[];
+    const fullQuestion = all.find(q => q.id === realId);
+    console.log('Full question found:', fullQuestion);
 
-  if (fullQuestion) {
-    this.questions = [...this.questions, fullQuestion];
-    this.questions = all.filter(q =>
-      this.questions.some(qq => qq.id === q.id) || q.id === fullQuestion.id
-    );
-    this.applyFilters();
-  } else {
-    console.warn('Question not found in resource for restoration', { realId, availableIds: all.map(q => q.id) });
+    if (fullQuestion) {
+      this.questions = [...this.questions, fullQuestion];
+      this.questions = all.filter(q =>
+        this.questions.some(qq => qq.id === q.id) || q.id === fullQuestion.id
+      );
+      this.applyFilters();
+    } else {
+      console.warn('Question not found in resource for restoration', { realId, availableIds: all.map(q => q.id) });
+    }
   }
-}
-
-
 
 }
 

@@ -89,13 +89,11 @@
               <div class="flex flex-col sm:flex-row gap-4">
                 <button
                   class="bg-sky-700 hover:bg-sky-800 text-white font-medium px-6 py-2 rounded disabled:bg-sky-400"
-                  [disabled]="!resourceService.blocksResource.value()?.length"
                   (click)="saveTest()">Save test</button>
 
                 <button
                   class="bg-sky-700 hover:bg-sky-800 text-white font-medium px-6 py-2 rounded disabled:bg-sky-400"
-                  [disabled]="!resourceService.blocksResource.value()?.length"
-                  (click)="saveTest(true)">Save and proceed →</button>
+                  (click)="navigate()">Next →</button>
               </div>
             </div>
             @if(resourceService.blocksResource.value()?.length === 0) {
@@ -146,3 +144,9 @@
     </div>
   </div>
 </div>
+  <app-confirm-dialog
+    [visible]="confirmDialogVisible"
+    [message]="confirmDialogMessage"
+    (confirm)="onConfirmNavigation()"
+    (cancel)="onCancelNavigation()"
+    ></app-confirm-dialog>

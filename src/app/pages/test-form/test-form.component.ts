@@ -16,11 +16,13 @@ import { SessionStorageService } from '../../services/session-storage.service';
 import { TestContextService } from '../../services/test-context.service';
 import { NgIf } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
+import { ConfirmDialogComponent } from '../../components/confirm-dialog/confirm-dialog.component';
+import { StepRedirectService } from '../../services/step-redirect.service';
 
 @Component({
   selector: 'app-test-form',
   standalone: true,
-  imports: [ReactiveFormsModule, SentencecasePipe, ProgressBarComponent, TagChipsComponent, NgIf],
+  imports: [ReactiveFormsModule, SentencecasePipe, ProgressBarComponent, TagChipsComponent, NgIf, ConfirmDialogComponent],
   templateUrl: './test-form.component.html',
   styleUrl: './test-form.component.css'
 })
@@ -34,6 +36,7 @@ export class TestFormComponent {
   private toast = inject(ToastService);
   private sessionStorage = inject(SessionStorageService);
   private testContextService = inject(TestContextService);
+  stepRedirectService = inject(StepRedirectService);
 
   private testId: number | null = null;
   private mode: string = '';
@@ -66,15 +69,28 @@ export class TestFormComponent {
     tags: this.fb.control<string[]>([])
   });
 
- ngOnInit() {
+ async ngOnInit() {
     const idParam = this.route.snapshot.paramMap.get('testId');
     this.mode = this.route.snapshot.paramMap.get('mode') || 'new';
-    this.testId = idParam ? Number(idParam) : null;
+    this.testId = idParam ? Number(idParam) : this.sessionStorage.getTestId();
+
+    console.log('[TestFormComponent] Initialized with mode:', this.mode, 'and testId:', this.testId);
+    if (this.testId) {
+      const redirected = await this.stepRedirectService.redirectIfStepAlreadyCompleted(
+        this.mode,
+        this.testId,
+        1,
+        (id) => ['/test/edit', id]
+      );
+      if (redirected) return;
+    }
+
     this.testService.getSuggestedTags().subscribe((tags) => {
       this.suggestedTags = tags.length < 5
       ? [...new Set([...tags, ...this.defaultTags])]
       : tags;
     });
+
     if (!this.testId) {
       this.testContextService.resetContext();
       this.testState = null;
@@ -84,7 +100,7 @@ export class TestFormComponent {
     } else {
       this.sessionStorage.setTestId(this.testId);
 
-      this.testContextService.ensureContext(this.testId, this.mode).subscribe(() => {
+      this.testContextService.ensureContext(this.testId, this.mode, 1).subscribe(() => {
         this.testContextService.getTest().subscribe((test) => {
           if (test) {
             this.testState = test.state ?? null;
@@ -131,7 +147,20 @@ export class TestFormComponent {
     return this.testForm.get('tags')?.value || [];
   }
 
-  async saveTest(navigate: boolean = false): Promise<void> {
+  onTagsChanged(tags: string[]) {
+    this.testForm.patchValue({ tags });
+  }
+
+  get completedStepsArray(): number[] {
+    return this.testState?.currentStep ? Array.from({ length: this.testState.currentStep }, (_, i) => i + 1) : [];
+  }
+
+  isSaved = false;
+  confirmDialogVisible = false;
+  confirmDialogMessage = 'Are you sure you want to proceed? All unsaved changes will be lost';
+  pendingStep: number | null = null;
+
+  async saveTest(): Promise<void> {
     const test: Test = this.testForm.value as Test;
 
     if (!this.testForm.valid) {
@@ -142,55 +171,91 @@ export class TestFormComponent {
 
     try {
       let savedTest: Test;
-
       if (this.testId) {
         savedTest = await firstValueFrom(this.testService.updateTest(this.testId, test));
         this.toast.show({ message: 'Test updated successfully', type: 'success' });
       } else {
         savedTest = await firstValueFrom(this.testService.addTest(test));
+        const step = savedTest.state?.currentStep ?? 1;
+        this.step = step;
+        this.completedSteps.push(this.step);
+
         if (!savedTest || !savedTest.id) {
           console.error('[saveTest] Test ID is not defined after creation:', savedTest);
           return;
         }
+
         this.toast.show({ message: 'Test created successfully', type: 'success' });
         this.testId = savedTest.id;
         this.sessionStorage.setTestId(savedTest.id);
+        await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', 1, true));
         this.router.navigate(['/test/edit', savedTest.id]);
-        await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', true));
+        return;
       }
 
-      if (navigate) {
-        const step = savedTest.state?.currentStep ?? 1;
-        this.step = step;
-        this.completedSteps.push(this.step);
-        this.toast.show({ message: 'Going to next step...', type: 'info' });
-        setTimeout(() => {
-          this.router.navigate(step === 1 ? ['/test-blocks/new'] : ['/test-blocks/edit', savedTest.id]);
-        }, 700);
-      }
+      this.testForm.markAsPristine();
+      this.isSaved = true;
 
     } catch (err) {
-      console.error('[saveTest] Error:', err);
       const message = err instanceof HttpErrorResponse ? err.error.detail : 'An error occurred while saving the test';
       this.toast.show({ message: message, type: 'error' });
     }
   }
 
-  onTagsChanged(tags: string[]) {
-    this.testForm.patchValue({ tags });
-  }
-
-  get completedStepsArray(): number[] {
-    return this.testState?.currentStep ? Array.from({ length: this.testState.currentStep }, (_, i) => i + 1) : [];
-  }
-
-  onStepSelected(step: number) {
+  navigateToStep(step: number): void {
     const id = this.testId || this.sessionStorage.getTestId();
     if (!id || !stepRoutes[step]) return;
     this.router.navigate(stepRoutes[step](id));
   }
+
+  onStepSelected(step: number): void {
+    if (this.isSaved || !this.testForm.dirty) {
+      this.navigateToStep(step);
+      return;
+    }
+
+    if (this.mode === 'new') {
+      this.toast.show({ message: 'Please save the test before proceeding', type: 'warning' });
+      return;
+    }
+
+    this.pendingStep = step;
+    this.confirmDialogVisible = true;
+  }
+
+  onConfirmNavigation(): void {
+    if (this.pendingStep !== null) {
+      this.navigateToStep(this.pendingStep);
+    }
+    this.resetNavigationState();
+  }
+
+  onCancelNavigation(): void {
+    this.resetNavigationState();
+  }
+
+  resetNavigationState(): void {
+    this.confirmDialogVisible = false;
+    this.pendingStep = null;
+  }
+
+  navigate(): void {
+    if (this.isSaved  || !this.testForm.dirty) {
+      this.toast.show({ message: 'Going to next step...', type: 'info' });
+      setTimeout(() => {
+        const route = this.testState?.currentStep === 1 ? ['/test-blocks/new'] : ['/test-blocks/edit', this.testId];
+        this.router.navigate(route);
+      }, 700);
+    } else {
+      if (this.mode === 'new') {
+        this.toast.show({ message: 'Please save the test before proceeding', type: 'warning' });
+      } else {
+        this.pendingStep = (this.testState?.currentStep ?? 1) + 1;
+        this.confirmDialogVisible = true;
+      }
+    }
+  }
+
 }
-
-
 
 export default TestFormComponent;

@@ -1,5 +1,5 @@
 <div class="min-h-screen bg-white pt-6 p-4 sm:px-6 lg:px-8">
-    <app-progress-bar
+  <app-progress-bar
     *ngIf="testState"
     [step]="step"
     [totalSteps]="8"
@@ -7,125 +7,161 @@
     (stepClicked)="onStepSelected($event)"
     [maxAllowedStep]="testState.currentStep"
   ></app-progress-bar>
-  <div class="w-2/3 max-w-4xl mx-auto">
-  <h1 class="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-gray-800 mb-4 font-header">Define weights</h1>
-  <hr class="mb-6 border-gray-300" />
-  @for (block of blocks; track block.id) {
-    <div class="mb-12">
-      <h2 class="text-base sm:text-lg md:text-xl lg:text-2xl font-semibold text-sky-700 mb-4 font-header mb-4">{{ block.name }}</h2>
+
+  <div class="w-full max-w-[50vw] mx-auto">
+    <h1 class="text-xl sm:text-2xl font-semibold text-gray-800 mb-6">
+      Define weights
+    </h1>
+    <hr class="mb-6" />
+    @for (block of blocks; track block.id) {
+    <div class="mb-10">
+      <h2 class="text-lg sm:text-xl font-semibold text-gray-700 mb-4">
+        {{ block.name }}
+      </h2>
 
       @for (question of getQuestionsByBlock(block.id!); track question.id) {
-        <div class="mb-6 border rounded shadow-sm p-4" tabindex="-1"
-          #questionContainer
-          [attr.data-question-id]="question.id" 
-            (focusout)="onQuestionFocusOut($event, block.id!, question.id!)"
-            [ngClass]="{
-    'border-red-500': invalidQuestions.includes(question.id!) || hasInvalidGradualScale(block.id!, question.id!)
-  }"
+      <div
+        class="mb-6 border border-gray-300 rounded-xl p-4 bg-white shadow-sm transition-all"
+        tabindex="-1"
+        #questionContainer
+        [attr.data-question-id]="question.id"
+        (focusout)="onQuestionFocusOut($event, block.id!, question.id!)"
+        [ngClass]="{
+          'border-red-500':
+            invalidQuestions.includes(question.id!) ||
+            hasInvalidGradualScale(block.id!, question.id!)
+        }"
+      >
+        <h3 class="text-base sm:text-lg font-medium text-gray-800 mb-4">
+          {{ question.text }}
+        </h3>
+        <hr />
 
-          >
-          <h3 class="text-lg font-semibold text-gray-800 mb-3">{{ question.text }}</h3>
+        <table class="w-full text-base">
+          <thead class="bg-sky-50 text-gray-700">
+            <tr>
+              <th class="p-2 text-left w-1/3">Answers</th>
+              @for (scale of getScalesForBlock(block.id!); track scale.id) {
+              <th
+                class="p-2 text-center w-1/6"
+                [ngClass]="{
+                  'bg-red-100 border border-red-500': emptyScales.includes(
+                    scale.pole1!
+                  )
+                }"
+              >
+                {{ scale.pole1 }}
+              </th>
+              }
+            </tr>
+          </thead>
 
-          <table class="w-full border border-gray-300">
-            <thead class="bg-sky-50">
-              <tr>
-                <th class="p-2 w-1/3">Answer</th>
-                @for (scale of getScalesForBlock(block.id!); track scale.id) {
+          <tbody>
+            @for (answer of getAnswersForQuestion(question.id!); track
+            answer.id) {
+            <tr class="border-t border-gray-300">
+              <td class="p-2 text-gray-700">{{ answer.text }}</td>
 
-                    <th class="p-2 text-center w-1/6"
-                    [ngClass]="{ 'bg-red-100 border-red-500 border': emptyScales.includes(scale.pole1!) }"
-                    >{{ scale.pole1 }}</th>
+              @for (scale of getScalesForBlock(block.id!); track scale.id) { @if
+              (scale.scaleType == 'unipolar') {
+              <td class="text-center">
+                <input
+                  type="checkbox"
+                  [formControl]="
+                    getValueControl(block.id!, scale.id!, answer.id!)
+                  "
+                  (change)="
+                    onCheckboxChange($event, block.id!, scale.id!, answer.id!)
+                  "
+                  class="form-checkbox h-4 w-4 text-sky-600"
+                />
+              </td>
+              } @else if (scale.scaleType == 'bipolar') {
+              <td class="text-center" colspan="2">
+                <select
+                  [formControl]="
+                    getValueControl(block.id!, scale.id!, answer.id!)
+                  "
+                  class="border border-gray-300 rounded px-2 py-1 focus:ring-sky-500 focus:border-sky-500"
+                  (change)="
+                    onSelectChange($event, block.id!, scale.id!, answer.id!)
+                  "
+                >
+                  <option [value]="0">—</option>
+                  <option [value]="-1">-1</option>
+                  <option [value]="1">1</option>
+                </select>
+              </td>
+              } @else if (scale.scaleType == 'gradual') {
+              <td class="text-center">
+                <select
+                  [formControl]="
+                    getValueControl(block.id!, scale.id!, answer.id!)
+                  "
+                  class="border border-gray-300 rounded px-2 py-1 focus:ring-sky-500 focus:border-sky-500"
+                  (change)="
+                    onSelectChange($event, block.id!, scale.id!, answer.id!)
+                  "
+                >
+                  <option [value]="0">—</option>
+                  <ng-container
+                    *ngFor="let i of generateRange(block.numberOfAnswers)"
+                  >
+                    <option [value]="i">{{ i }}</option>
+                  </ng-container>
+                </select>
+              </td>
+              } }
+            </tr>
+            }
+          </tbody>
+        </table>
 
-                }
-              </tr>
-            </thead>
-
-<tbody>
-  @for (answer of getAnswersForQuestion(question.id!); track answer.id) {
-    <tr class="border-t">
-      <td class="p-2 text-gray-700">{{ answer.text }}</td>
-
-      @for (scale of getScalesForBlock(block.id!); track scale.id) {
-        @if (scale.scaleType == 'unipolar') {
-          <td class="text-center">
-          <input
-            type="checkbox"
-            [formControl]="getValueControl(block.id!, scale.id!, answer.id!)"
-            (change)="onCheckboxChange($event, block.id!, scale.id!, answer.id!)"
-          />
-
-          </td>
-        } @else if (scale.scaleType == 'bipolar') {
-          <td class="text-center" colspan="2">
-            <select
-              [formControl]="getValueControl(block.id!, scale.id!, answer.id!)"
-              class="border border-gray-300 rounded px-2 py-1"
-              (change)="onSelectChange($event, block.id!, scale.id!, answer.id!)"
-            >
-              <option [value]="0">—</option>
-              <option [value]="-1">-1</option>
-              <option [value]="1">1</option>
-            </select>
-          </td>
-        }
-        @else if (scale.scaleType == 'gradual') {
-  <td class="text-center">
-    <select
-      [formControl]="getValueControl(block.id!, scale.id!, answer.id!)"
-      class="border border-gray-300 rounded px-2 py-1"
-      (change)="onSelectChange($event, block.id!, scale.id!, answer.id!)"
-    >
-      <option [value]="0">—</option>
-    <ng-container *ngFor="let i of generateRange(block.numberOfAnswers)">
-      <option [value]="i">{{ i }}</option>
-    </ng-container>
-    </select>
-  </td>
-}
-
+        <!-- Валидация -->
+        <p
+          *ngIf="getErrorType(question.id!) === 'missing'"
+          class="text-red-600"
+        >
+          Please indicate at least one weight for this question.
+        </p>
+        <p
+          *ngIf="getErrorType(question.id!) === 'missingValues'"
+          class="text-red-600"
+        >
+          Gradual scale must contain all key values.
+        </p>
+        <p
+          *ngIf="getErrorType(question.id!) === 'notUnique'"
+          class="text-red-600"
+        >
+          Gradual scale must contain only unique values.
+        </p>
+      </div>
       }
-    </tr>
-  }
-</tbody>
-
-          </table>
-          <p
-  *ngIf="invalidQuestions.includes(question.id!)"
-  class="mt-2 text-sm text-red-600 transition-opacity duration-500"
->
-  Please indicate at least one weight for this question
-</p>
-<p
-  *ngIf="invalidGradualQuestionsNotUnique.includes(question.id!)"
-  class="mt-1 text-sm text-red-600"
->
-  Gradual scale must contain only unique values
-</p>
-    <p
-      *ngIf="invalidGradualQuestionsMissingValues.includes(question.id!)"
-      class="mt-1 text-sm text-red-600"
-    >
-      Gradual scale must contain all key values
-    </p>
-
-        </div>
-
-
-      }
-      
     </div>
-  }
+    }
 
-  <div class="flex justify-end gap-4 mt-6">
-    <button 
-      class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-6 rounded shadow"
-      (click)="saveWeights()">
-      Save
-    </button>
-    <button class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-6 rounded shadow"
-            (click)="saveWeights(true)">
-      Next →
-    </button>
-  </div>
+    <!-- Кнопки -->
+    <div class="flex flex-col sm:flex-row justify-end gap-4 mt-8">
+      <button
+        class="w-full sm:w-auto bg-sky-700 hover:bg-sky-800 text-white text-sm sm:text-base font-medium px-6 py-2 rounded transition"
+        (click)="saveWeights()"
+      >
+        Save
+      </button>
+
+      <button
+        class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white text-sm sm:text-base font-medium px-6 py-2 rounded transition"
+        (click)="navigate()"
+      >
+        Next →
+      </button>
+    </div>
   </div>
 </div>
+<app-confirm-dialog
+  [visible]="confirmNavigationVisible"
+  [message]="confirmNavigationMessage"
+  (confirm)="onConfirmNavigation()"
+  (cancel)="onCancelNavigation()"
+></app-confirm-dialog>

@@ -1,0 +1,48 @@
+:host ::ng-deep .pdf-export * {
+  --tw-bg-opacity: 1;
+  --tw-text-opacity: 1;
+
+  .bg-sky-600 {
+    background-color: rgb(2, 132, 199) !important;
+  }
+
+  .bg-sky-700 {
+    background-color: rgb(3, 105, 161) !important;
+  }
+
+  .text-white {
+    color: rgb(255, 255, 255) !important;
+  }
+
+  .text-gray-800 {
+    color: rgb(31, 41, 55) !important;
+  }
+
+  .text-gray-700 {
+    color: rgb(55, 65, 81) !important;
+  }
+
+  .text-gray-500 {
+    color: rgb(107, 114, 128) !important;
+  }
+
+  .border-gray-300 {
+    border-color: rgb(209, 213, 219) !important;
+  }
+
+  .bg-gray-300 {
+    background-color: rgb(209, 213, 219) !important;
+  }
+
+  .bg-green-600 {
+    background-color: rgb(22, 163, 74) !important;
+  }
+
+  .bg-green-700 {
+    background-color: rgb(21, 128, 61) !important;
+  }
+
+  .bg-white {
+    background-color: rgb(255, 255, 255) !important;
+  }
+}

@@ -37,7 +37,10 @@
           draggable="true"
           (dragstart)="onDragStart($event, question)"
         >
-          {{ question.text }}
+        <div class="font-medium">{{ question.text }}</div>
+        <div class="text-xs text-gray-600 italic mt-1">
+         from test: {{ question.testTitle || 'неизвестно' }}
+        </div>
         </div>
       }
     } @else {
