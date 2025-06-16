@@ -209,16 +209,21 @@ export class PlayTestService {
 
   timeLeft = signal<number | null>(null);
 
-  startBlock() {
-    this.stopTimer();
-    const currentBlock = this.currentBlock();
-    if (currentBlock?.hasTimeLimit) {
-      this.timeLeft.set(currentBlock.timeLimit * 10);
-      this.startTimer();
-    }
-
-    this.blockStarted.set(true);
+startBlock() {
+  if (this.blockStarted()) {
+    console.warn('[BLOCK] Already started, skipping');
+    return;
   }
+
+  this.blockStarted.set(true);
+
+  const currentBlock = this.currentBlock();
+  if (currentBlock?.hasTimeLimit) {
+    this.timeLeft.set(currentBlock.timeLimit * 10);
+    this.startTimer();
+  }
+}
+
 
   private startTimer() {
     this.stopTimer();
