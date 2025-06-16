@@ -380,6 +380,11 @@ export class TestBlocksComponent {
       return;
     }
 
+    if(this.newBlockForm.touched) {
+      this.toast.show({message:'Please press add block button', type: 'warning'});
+      return;
+    }
+
     if (!this.testState || !this.testId) return;
 
     if (this.pendingBlocks.length > 0) {

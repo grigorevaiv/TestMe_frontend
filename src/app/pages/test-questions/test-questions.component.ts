@@ -516,6 +516,7 @@ export class TestQuestionsComponent {
         message: 'Questions saved successfully',
         type: 'success',
       });
+      this.markAllQuestionsAsPristine();
       this.resourceService.triggerRefresh();
     } else {
       this.updateQuestions();
@@ -523,6 +524,7 @@ export class TestQuestionsComponent {
         message: 'Questions updated successfully',
         type: 'success',
       });
+      this.markAllQuestionsAsPristine();
       this.resourceService.triggerRefresh();
     }
 
@@ -816,4 +818,18 @@ export class TestQuestionsComponent {
   }
 
   @ViewChildren('questionRef') questionRefs!: QueryList<ElementRef>;
+
+  markAllQuestionsAsPristine(): void {
+    for (const formArray of Object.values(this.questionsOfBlock)) {
+      for (const form of formArray.controls) {
+        form.markAsPristine();
+        form.markAsUntouched();
+        Object.values(form.controls).forEach(control => {
+          control.markAsPristine();
+          control.markAsUntouched();
+        });
+      }
+    }
+  }
+
 }

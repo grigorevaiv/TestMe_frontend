@@ -332,6 +332,11 @@ export class TestScalesComponent {
       });
       return;
     }
+    
+    if(this.newScaleForm.touched) {
+      this.toast.show({message:'Please press add scale button', type: 'warning'});
+      return;
+    }
 
     if (this.pendingScales.length === 0 && this.scales.length === 0) {
       this.toast.show({

@@ -862,7 +862,12 @@ export class TestWeightsComponent {
               this.invalidGradualQuestionsMissingValues.push(questionId);
             }
 
-            if (!isUnique || !isFilled) {
+            const isActive = this.isGradualScaleActive(
+              blockId,
+              questionId,
+              scale.id!
+            );
+            if (isActive && (!isUnique || !isFilled)) {
               this.invalidQuestions.push(questionId);
               break;
             }
@@ -1057,5 +1062,19 @@ export class TestWeightsComponent {
 
   get weightsAreLocked(): boolean {
     return (this.testState?.currentStep ?? 1) >= 7;
+  }
+
+  isGradualScaleActive(
+    blockId: number,
+    questionId: number,
+    scaleId: number
+  ): boolean {
+    const answers = this.getAnswersForQuestion(questionId);
+    return answers.some((answer) => {
+      const val =
+        this.getWeightControl(blockId, scaleId, answer.id!)?.get('value')
+          ?.value ?? 0;
+      return val !== 0;
+    });
   }
 }

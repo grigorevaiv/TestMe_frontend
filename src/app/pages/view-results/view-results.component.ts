@@ -81,6 +81,8 @@ export class ViewResultsComponent {
   selectedTestIds: number[] = [];
 
   openModal() {
+    console.log('Patient email', this.patientEmail);
+    console.log('Patient active', this.isPatientActive);
     if (!this.isPatientActive) {
       this.toast.show({
         message: 'You can assign tests only to active patients',
@@ -88,7 +90,6 @@ export class ViewResultsComponent {
       });
       return;
     }
-
     this.isModalOpen = true;
   }
 
