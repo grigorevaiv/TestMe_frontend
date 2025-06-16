@@ -240,6 +240,7 @@ export class TestQuestionsComponent {
           isUploadingImage: false,
           hasImage: true,
         });
+        console.log('Form after patching imageUrl:', questionForm.value);
       },
       error: (err) => {
         console.error('Image upload failed:', err);
