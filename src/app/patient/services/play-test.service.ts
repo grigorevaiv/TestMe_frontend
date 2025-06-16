@@ -155,7 +155,7 @@ export class PlayTestService {
     if (this.currentBlockIndex < numberOfBlocks - 1) {
       this.currentBlockIndex++;
       this.currentBlock.set(this.blocks[this.currentBlockIndex]);
-      this.startBlock();
+      //this.startBlock();
       const currentBlockId = Array.from(this.questionsByBlock.keys())[
         this.currentBlockIndex
       ];
