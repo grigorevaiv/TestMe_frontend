@@ -314,6 +314,8 @@ export class TestQuestionsComponent {
     }
 
     try {
+      console.log('Final payload to saveQuestionsBatch:', JSON.stringify(payload, null, 2));
+
       const response = await firstValueFrom(
         this.testService.saveQuestionsBatch(this.testId, payload)
       );
@@ -385,6 +387,7 @@ export class TestQuestionsComponent {
         console.log('Questions updated successfully:', payloadToUpdate);
       }
       if (payloadToCreate.length > 0) {
+        console.log('Final payload to create:', JSON.stringify(payloadToCreate, null, 2));
         await firstValueFrom(
           this.testService.saveQuestionsBatch(this.testId, payloadToCreate)
         );
