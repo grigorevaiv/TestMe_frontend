@@ -155,7 +155,7 @@ export class PlayTestService {
     if (this.currentBlockIndex < numberOfBlocks - 1) {
       this.currentBlockIndex++;
       this.currentBlock.set(this.blocks[this.currentBlockIndex]);
-      //this.startBlock();
+      this.startBlock();
       const currentBlockId = Array.from(this.questionsByBlock.keys())[
         this.currentBlockIndex
       ];
@@ -209,15 +209,17 @@ export class PlayTestService {
 
   timeLeft = signal<number | null>(null);
 
-  startBlock() {
-    this.stopTimer();
-    const currentBlock = this.currentBlock();
-    this.blockStarted.set(true);
-    if (currentBlock?.hasTimeLimit) {
-      this.timeLeft.set(currentBlock.timeLimit * 10);
-      this.startTimer();
-    }
+startBlock() {
+  this.blockStarted.set(true); // сначала считаем блок начатым
+
+  this.stopTimer(); // затем таймер
+
+  const currentBlock = this.currentBlock();
+  if (currentBlock?.hasTimeLimit) {
+    this.timeLeft.set(currentBlock.timeLimit * 10);
+    this.startTimer();
   }
+}
 
   private startTimer() {
     this.stopTimer();

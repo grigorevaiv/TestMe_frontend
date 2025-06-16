@@ -120,11 +120,10 @@ export class PlayTestComponent {
     this.playTestService.prevQuestion();
     this.loadSelectedAnswers();
   }
-
-  startBlock() {
-    this.playTestService.blockStarted.set(true);
-  }
-
+//посмотрим насколько это косяк
+startBlock() {
+  this.playTestService.startBlock(); // теперь запускается и таймер
+}
   startTest() {
     this.playTestService.startTest();
   }
