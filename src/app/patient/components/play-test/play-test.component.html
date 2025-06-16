@@ -6,34 +6,30 @@
   <main class="flex-1 flex flex-col">
     <!-- Прогресс по блокам -->
     @if (testStarted() && blockIds.length && !testCompleted()) {
-    <div class="w-full px-0 mx-0 space-y-2">
+    <div class="flex gap-4 w-full justify-around">
       @for (blockId of blockIds; track blockId) {
-      <div class="relative bg-gray-200 h-6 rounded overflow-hidden">
-        <div
-          class="bg-green-500 h-full transition-all duration-500"
-          [style.width.%]="getBlockProgress(blockId) * 100"
-        ></div>
-
-        @if (block()?.id === blockId && block()?.hasTimeLimit && timeLeft() !== null) {
-        <div
-          class="absolute right-4 top-1/2 -translate-y-1/2 text-black font-semibold text-base z-10 pointer-events-none"
-        >
-          Time left {{ timeLeft() }} sec
+      <div class="flex flex-col items-center w-full">
+        <p class="text-sm text-gray-600 mb-1">Block {{ block().order }}: {{block().name}}</p>
+        <div class="w-full h-3 bg-gray-200 rounded">
+          <div
+            class="h-full bg-green-500 rounded"
+            [style.width.%]="getBlockProgress(blockId) * 100"
+          ></div>
         </div>
-        }
       </div>
-
-      <p class="ml-2 text-sm text-gray-600">
-        Block {{ block().order }}: {{ block().name }}
-      </p>
       }
     </div>
+
     }
 
     <!-- Таймер истёк -->
     @if (blockTimeout()) {
-    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-2xl p-6 shadow-xl max-w-sm text-center animate-fade-in">
+    <div
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+    >
+      <div
+        class="bg-white rounded-2xl p-6 shadow-xl max-w-sm text-center animate-fade-in"
+      >
         <h2 class="text-xl font-semibold text-blue-900 mb-4">Time is up</h2>
         <p class="text-gray-700 mb-6">
           Redirecting to next block in 10 seconds...
@@ -51,7 +47,8 @@
     <!-- Контейнер, центрирующий по вертикали -->
     <div class="flex-1 flex items-center justify-center px-4">
       <!-- Единый экран для инструкций -->
-      @if ((!testStarted() && !testCompleted()) || (testStarted() && block() && !blockStarted() && !testCompleted())) {
+      @if ((!testStarted() && !testCompleted()) || (testStarted() && block() &&
+      !blockStarted() && !testCompleted())) {
       <div class="max-w-4xl w-full bg-white p-6 rounded-xl">
         <h1 class="text-2xl font-semibold text-blue-900 mb-4">
           {{ !testStarted() ? test.title : block().name }}
@@ -71,7 +68,9 @@
 
       <!-- Вопросы -->
       @if (question() && blockStarted()) {
-      <div class="w-full max-w-4xl p-6 rounded-xl flex flex-col items-center justify-center space-y-6">
+      <div
+        class="w-full max-w-4xl p-6 rounded-xl flex flex-col items-center justify-center space-y-6"
+      >
         <h2 class="text-xl font-semibold text-black break-words text-pretty">
           {{ question().text }}
         </h2>
@@ -81,14 +80,21 @@
           alt="Question Image"
           class="w-[400px] h-[300px] object-cover mb-4 rounded mx-auto"
         />
-        }
-        @if (question().questionAnswers?.length) {
+        } @if (question().questionAnswers?.length) {
         <form class="space-y-3 flex flex-col items-start">
           @for (answer of question().questionAnswers; track answer.id) {
-          <label class="flex items-start space-x-3 text-gray-700 break-words max-w-full">
+          <label
+            class="flex items-start space-x-3 text-gray-700 break-words max-w-full"
+          >
             <input
-              [type]="block().questionsType === 'single-choice' ? 'radio' : 'checkbox'"
-              [name]="block().questionsType === 'single-choice' ? 'question_' + question().id : 'answer_' + answer.id"
+              [type]="
+                block().questionsType === 'single-choice' ? 'radio' : 'checkbox'
+              "
+              [name]="
+                block().questionsType === 'single-choice'
+                  ? 'question_' + question().id
+                  : 'answer_' + answer.id
+              "
               [value]="answer.id"
               [checked]="selectedAnswers.includes(answer.id.toString())"
               (change)="updateSelectedAnswers($event)"

@@ -857,16 +857,16 @@ export class TestWeightsComponent {
             if (!isUnique) {
               this.invalidGradualQuestionsNotUnique.push(questionId);
             }
-
-            if (!isFilled) {
-              this.invalidGradualQuestionsMissingValues.push(questionId);
-            }
-
             const isActive = this.isGradualScaleActive(
               blockId,
               questionId,
               scale.id!
             );
+
+            if (isActive && !isFilled) {
+              this.invalidGradualQuestionsMissingValues.push(questionId);
+            }
+
             if (isActive && (!isUnique || !isFilled)) {
               this.invalidQuestions.push(questionId);
               break;
