@@ -104,7 +104,7 @@
                     (change)="onImageSelected($event, block.id!, j)"
                   />
                   <p class="text-red-500 text-sm mt-1">{{ (getError('imageUrl', block.id!, j) || '') | sentencecase }}</p>
-
+                  <p>{{question.get('imageUrl')?.value}}</p>
                   @if (imagePreviews?.[block.id!] && imagePreviews[block.id!][j]) {
                     <img
                       [src]="imagePreviews[block.id!][j]"
