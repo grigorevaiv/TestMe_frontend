@@ -15,7 +15,7 @@
 
     <app-search-filter
       [items]="patients"
-      [filterKeys]="['firstName', 'lastName', 'email', 'isActive']"
+      [filterKeys]="['firstName', 'lastName', 'email', 'isActive', 'birthDate']"
       (filtered)="filteredPatients = $event"
       [placeholder]="placeholder"
     />

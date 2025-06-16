@@ -6,11 +6,9 @@ import { JsonPipe, NgClass } from '@angular/common';
 import { ToastService } from '../../../services/toast.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PatientService } from '../../../services/patient.service';
-import { HeaderComponent } from "../header/header.component";
+import { HeaderComponent } from '../header/header.component';
 import { User } from '../../../interfaces/test.interface';
 import { FooterComponent } from '../footer/footer.component';
-
-
 
 @Component({
   selector: 'app-play-test',
@@ -35,14 +33,10 @@ export class PlayTestComponent {
   blockStarted = this.playTestService.blockStarted;
   testCompleted = this.playTestService.testCompleted;
   timeLeft = this.playTestService.timeLeft;
-  resultsSaved = false;
-  
+  blockTimeout = this.playTestService.blockTimeout;
 
-  get selectedAnswers(): string[] {
-    const q = this.question();
-    if (!q) return [];
-    return this.playTestService.userAnswers.get(q.id) ?? [];
-  }
+  resultsSaved = false;
+  selectedAnswers: string[] = [];
 
   async ngOnInit() {
     const token = this.route.snapshot.paramMap.get('token');
@@ -52,26 +46,31 @@ export class PlayTestComponent {
     }
 
     try {
-      const status = await firstValueFrom(this.patientService.checkTokenStatus(token));
-      
-      if (status.used) {
-        this.toast.show({ message: 'You already has completed the test', type: 'info' });
-        await this.router.navigate(['/thank-you']);
-        return;
-      }
-
+      const status = await firstValueFrom(
+        this.patientService.checkTokenStatus(token)
+      );
       const session = this.playTestService.sessionStorage.getTestSession();
+
       if (!session) {
-        this.toast.show({ message: 'Session not found', type: 'error' });
+        this.toast.show({ message: 'Please confirm your email', type: 'warning' });
         await this.router.navigate(['/play-test', token, 'verify']);
         return;
       }
 
-      this.playTestService.init(session);
+      if (status.used) {
+        this.toast.show({
+          message: 'You already have completed the test',
+          type: 'info',
+        });
+        await this.router.navigate(['/thank-you']);
+        return;
+      }
 
+      this.playTestService.init(session);
+      this.loadSelectedAnswers();
     } catch (err) {
       console.error('Token check failed:', err);
-      this.toast.show({ message: 'Invalid or expired token.', type: 'error' });
+      this.toast.show({ message: 'Invalid or expired token', type: 'error' });
       await this.router.navigate(['/']);
     }
   }
@@ -83,6 +82,45 @@ export class PlayTestComponent {
     }
   }
 
+  loadSelectedAnswers() {
+    const q = this.question();
+    if (!q) return;
+    const saved = this.playTestService.userAnswers.get(q.id);
+    this.selectedAnswers = saved ? [...saved] : [];
+  }
+
+  updateSelectedAnswers(event: Event) {
+    const target = event.target as HTMLInputElement;
+    if (!target) return;
+
+    if (target.type === 'checkbox') {
+      this.selectedAnswers = target.checked
+        ? [...this.selectedAnswers, target.value]
+        : this.selectedAnswers.filter((value) => value !== target.value);
+    } else if (target.type === 'radio') {
+      this.selectedAnswers = [target.value];
+    }
+  }
+
+  next() {
+    if (this.selectedAnswers.length === 0) {
+      this.toast.show({
+        message: 'Please select at least one answer',
+        type: 'error',
+      });
+      return;
+    }
+
+    this.playTestService.saveAnswers(this.question().id, this.selectedAnswers);
+    this.playTestService.nextQuestion();
+    this.loadSelectedAnswers();
+  }
+
+  prev() {
+    this.playTestService.prevQuestion();
+    this.loadSelectedAnswers();
+  }
+
   startBlock() {
     this.playTestService.blockStarted.set(true);
   }
@@ -90,115 +128,96 @@ export class PlayTestComponent {
   startTest() {
     this.playTestService.startTest();
   }
-  
-  next() {
-    if (this.selectedAnswers.length === 0) {
-      this.toast.show({message: 'Please select at least one answer', type: 'error'});
-      return;
-    }
-    this.playTestService.saveAnswers(this.question().id, this.selectedAnswers);
-    console.log(this.playTestService.userAnswers);
-    this.playTestService.nextQuestion();
-  }
-
-  prev() {
-    this.playTestService.prevQuestion();
-  }
-
-  updateSelectedAnswers(event: Event) {
-    const target = event.target as HTMLInputElement;
-    if (!target) return;
-
-    const current = this.selectedAnswers;
-    let updated: string[];
-
-    if (target.type === 'checkbox') {
-      updated = target.checked
-        ? [...current, target.value]
-        : current.filter(value => value !== target.value);
-    } else if (target.type === 'radio') {
-      updated = [target.value];
-    } else {
-      return;
-    }
-
-    this.playTestService.saveAnswers(this.question().id, updated);
-  }
-
-  async calculateResults() {
-    console.log(this.playTestService.userAnswers);
-    const answers = Array.from(this.playTestService.userAnswers.values()).flat();
-    const results = await firstValueFrom(this.testService.getTestResults(this.playTestService.testId!, this.playTestService.userId!));
-    console.log(results);
-  }
-
-async saveResults() {
-  const userAnswers = this.playTestService.userAnswers;
-  const session = this.playTestService.sessionStorage.getTestSession();
-  if (!session) {
-    console.error('Нет сессии теста');
-    return;
-  }
-  console.log('Токен для сессии:', session.token);
-  const allQuestions = this.playTestService.questionsWithAnswers.map(q => q.id);
-  const allWeights = this.playTestService.weights;
-  const allAnswers = this.playTestService.answers;
-
-  const completeAnswers: Record<number, string[]> = {};
-
-  for (const questionId of allQuestions) {
-    const answerIds = userAnswers.get(questionId);
-
-    if (answerIds?.length) {
-      completeAnswers[questionId] = answerIds;
-    } else {
-      const answersForQuestion = allAnswers.filter(a => a.questionId === questionId);
-
-      const fallbackAnswer = answersForQuestion.find(answer => {
-        return allWeights.some(w => w.answerId === answer.id && w.value === 0);
-      });
-
-      if (fallbackAnswer) {
-        completeAnswers[questionId] = [String(fallbackAnswer.id)];
-      } else {
-        console.warn(`Нет ответа с весом 0 для вопроса ${questionId}`);
-        completeAnswers[questionId] = [];
-      }
-    }
-  }
-
-  const payload = {
-    userId: session.userId,
-    testId: session.testId,
-    answers: completeAnswers,
-    token: session.token
-  };
-
-  console.log('Payload to send:', payload);
-
-  try {
-    const response : any = await firstValueFrom(this.testService.saveTestResults(session.testId, payload));
-    this.toast.show({ message: 'Results are successfully saved', type: 'success' });
-    const results = response.finalResult;
-    console.log('Results saved:', results);
-  } catch (error) {
-    console.error('Error on saving results', error);
-    this.toast.show({ message: 'You have already saved the results', type: 'info' });
-  }
-}
-
-
-
-
-  blockTimeout = this.playTestService.blockTimeout;
 
   continueAfterTimeout() {
     this.playTestService.continueAfterTimeout();
   }
 
+  async calculateResults() {
+    const answers = Array.from(
+      this.playTestService.userAnswers.values()
+    ).flat();
+    const results = await firstValueFrom(
+      this.testService.getTestResults(
+        this.playTestService.testId!,
+        this.playTestService.userId!
+      )
+    );
+    console.log(results);
+  }
+
+  async saveResults() {
+    const userAnswers = this.playTestService.userAnswers;
+    const session = this.playTestService.sessionStorage.getTestSession();
+    if (!session) {
+      console.error('No session');
+      return;
+    }
+
+    const allQuestions = this.playTestService.questionsWithAnswers.map(
+      (q) => q.id
+    );
+    const allWeights = this.playTestService.weights;
+    const allAnswers = this.playTestService.answers;
+
+    const completeAnswers: Record<number, string[]> = {};
+
+    for (const questionId of allQuestions) {
+      const answerIds = userAnswers.get(questionId);
+
+      if (answerIds?.length) {
+        completeAnswers[questionId] = answerIds;
+      } else {
+        const answersForQuestion = allAnswers.filter(
+          (a) => a.questionId === questionId
+        );
+
+        const fallbackAnswer = answersForQuestion.find((answer) => {
+          return allWeights.some(
+            (w) => w.answerId === answer.id && w.value === 0
+          );
+        });
+
+        if (fallbackAnswer) {
+          completeAnswers[questionId] = [String(fallbackAnswer.id)];
+        } else {
+          console.warn(`No answer with weight 0 for ${questionId}`);
+          completeAnswers[questionId] = [];
+        }
+      }
+    }
+
+    const payload = {
+      userId: session.userId,
+      testId: session.testId,
+      answers: completeAnswers,
+      token: session.token,
+    };
+
+    try {
+      const response: any = await firstValueFrom(
+        this.testService.saveTestResults(session.testId, payload)
+      );
+      this.toast.show({
+        message: 'Results are successfully saved',
+        type: 'success',
+      });
+      const results = response.finalResult;
+      console.log('Results saved:', results);
+    } catch (error) {
+      console.error('Error on saving results', error);
+      this.toast.show({
+        message: 'You have already saved the results',
+        type: 'info',
+      });
+    }
+  }
+
   getBlockProgress(blockId: number): number {
     const questions = this.playTestService.questionsByBlock.get(blockId) || [];
-    const answered = questions.filter((q:any) => this.playTestService.userAnswers.has(q.id)).length;
+    const answered = questions.filter((q: any) =>
+      this.playTestService.userAnswers.has(q.id)
+    ).length;
     return questions.length > 0 ? answered / questions.length : 0;
   }
 
@@ -206,8 +225,7 @@ async saveResults() {
     return Array.from(this.playTestService.questionsByBlock.keys());
   }
 
-
-
+  get isLongQuestion(): boolean {
+    return this.question()?.text.length > 70;
+  }
 }
-
-

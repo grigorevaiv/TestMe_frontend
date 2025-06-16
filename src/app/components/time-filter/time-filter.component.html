@@ -1,13 +1,22 @@
-    <div class="flex gap-4 items-end mb-6">
-      <div class="flex flex-col">
-        <label class="text-sm text-gray-600 mb-1">From</label>
-        <input type="date" [formControl]="fromDate" class="border rounded px-2 py-1" />
-      </div>
-      <div class="flex flex-col">
-        <label class="text-sm text-gray-600 mb-1">To</label>
-        <input type="date" [formControl]="toDate" class="border rounded px-2 py-1" />
-      </div>
-      <button (click)="emitFilter()" class="px-4 py-1.5 bg-sky-600 text-white rounded hover:bg-sky-700 transition">
-        Search
-      </button>
-    </div>
+<div class="flex gap-4 items-end mb-6">
+  <div class="flex flex-col">
+    <label class="text-sm text-gray-600 mb-1">From</label>
+    <input type="date" [formControl]="fromDate" class="border rounded px-2 py-1" />
+  </div>
+  <div class="flex flex-col">
+    <label class="text-sm text-gray-600 mb-1">To</label>
+    <input type="date" [formControl]="toDate" class="border rounded px-2 py-1" />
+  </div>
+  <button
+    (click)="emitFilter()"
+    class="px-4 py-1.5 bg-sky-600 text-white rounded hover:bg-sky-700 transition"
+  >
+    Search
+  </button>
+  <button
+    (click)="clearFilter()"
+    class="px-4 py-1.5 bg-white text-sky-700 border-sky-700 rounded hover:bg-sky-600 hover:text-white transition"
+  >
+    Clear
+  </button>
+</div>

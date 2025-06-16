@@ -51,7 +51,7 @@ export class ResourceService {
   });
 
 
-  blocksResource = rxResource({
+  /*blocksResource = rxResource({
     request: () => this.testId$().pipe(
       tap((id) => console.log('📥 [blocksResource.request] testId =', id))
     ),
@@ -89,10 +89,14 @@ export class ResourceService {
   });
 
   weightsResource = rxResource({
-    request: () => this.testId$(),
+        request: () => this.testId$().pipe(
+      tap((id) => console.log('📥 [WeightsResource.request] testId =', id))
+    ),
     loader: ({ request }) =>
       request.pipe(
-        switchMap((testId) => this.testService.getWeights(testId))
+        tap((id) => console.log('🚀 [weightsResource.loader] loading for testId:', id)),
+        switchMap((testId) => this.testService.getWeights(testId)),
+        tap((id) => console.log('🚀 [weightsResource.loader] loading for testId:', id))
       )
   });
 
@@ -110,7 +114,7 @@ export class ResourceService {
       request.pipe(
         switchMap((testId) => this.testService.getInterpretations(testId))
       )
-  });
+  });*/
 
   allQuestionsResource = rxResource({
     request: () => {
@@ -129,7 +133,10 @@ export class ResourceService {
   });
 
   allTagsResource = rxResource({
-    request: () => ({}),
+    request: () => {
+      this.refreshTrigger();
+      return {};             
+    },
     loader: () => this.testService.getAllTags()
   });
 

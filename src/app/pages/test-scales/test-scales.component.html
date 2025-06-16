@@ -26,7 +26,14 @@
               <option value="bipolar">Bipolar</option>
               <option value="gradual">Gradual</option>
             </select>
+            @if(newScaleForm.get('scaleType')?.disabled) {
+            <p class="text-gray-500 text-xs mt-1">
+              Scale type cannot be changed after weights are defined
+            </p>
+          }
           </div>
+
+
 
           <!-- Название полюса (-) -->
           <div>
@@ -70,6 +77,11 @@
             @if(getError('blockId')) {
               <p class="text-red-500 text-sm mt-1">{{ (getError('blockId') || '') | sentencecase }}</p>
             }
+            @if(newScaleForm.get('blockId')?.disabled) {
+            <p class="text-gray-500 text-xs mt-1">
+              Block cannot be changed after weights are defined
+            </p>
+          }
           </div>
 
           <!-- Кнопки -->
@@ -96,9 +108,7 @@
                   (click)="navigate()">Next →</button>
               </div>
             </div>
-            @if(resourceService.blocksResource.value()?.length === 0) {
-              <p class="text-red-500 text-sm mt-2">Please add blocks to assign scales</p>
-            }
+
           }
         </form>
       </div>
@@ -127,6 +137,7 @@
           (edit)="onEditScale(scale)"
           (delete)="confirmDelete(scale)"
           [isEditing]="isEditing"
+          [blockName]="getBlockName(scale.blockId)"
         ></app-list-item>
 
         <app-confirm-dialog

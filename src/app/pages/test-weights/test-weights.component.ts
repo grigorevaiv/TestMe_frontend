@@ -30,7 +30,7 @@ import { NgClass, NgFor, NgIf } from '@angular/common';
 import { ValidationService } from '../../services/validation.service';
 import { ToastService } from '../../services/toast.service';
 import { ProgressBarComponent } from '../../components/progress-bar/progress-bar.component';
-import { stepRoutes } from '../../constants/step-routes';
+import { stepRoutes, stepRoutesNew } from '../../constants/step-routes';
 import { SessionStorageService } from '../../services/session-storage.service';
 import { TestContextService } from '../../services/test-context.service';
 import { ConfirmDialogComponent } from '../../components/confirm-dialog/confirm-dialog.component';
@@ -108,6 +108,7 @@ export class TestWeightsComponent {
     this.testId = id;
     this.mode = mode;
     this.sessionStorage.setTestId(id);
+    window.addEventListener('beforeunload', this.beforeUnloadHandler);
 
     await firstValueFrom(
       this.testContextService.ensureContext(this.testId, this.mode, 6)
@@ -115,6 +116,10 @@ export class TestWeightsComponent {
 
     this.testContextService.getTest().subscribe((test) => {
       this.testState = test?.state ?? null;
+      console.log(
+        '[TestWeightsComponent] Test state loaded:',
+        this.testState.currentStep
+      );
     });
 
     this.testContextService.getBlocks().subscribe((blocks) => {
@@ -137,9 +142,10 @@ export class TestWeightsComponent {
     this.testContextService.getWeights().subscribe((weights) => {
       this.weights = weights || [];
       this.patchWeightsToForm(this.weights);
+      if (this.weightsAreLocked) {
+        this.disableAllWeightControls();
+      }
     });
-
-    window.addEventListener('beforeunload', this.beforeUnloadHandler);
   }
 
   get completedStepsArray(): number[] {
@@ -410,7 +416,12 @@ export class TestWeightsComponent {
       );
       console.log('Test state updated to step 6:', this.testState);
       await firstValueFrom(
-        this.testContextService.loadContextIfNeeded(this.testId!, 'edit', 6, true)
+        this.testContextService.loadContextIfNeeded(
+          this.testId!,
+          'edit',
+          6,
+          true
+        )
       );
       this.router.navigate(['/test-weights/edit', this.testId]);
     }
@@ -452,6 +463,12 @@ export class TestWeightsComponent {
   pendingStep: number | null = null;
 
   navigate(): void {
+    console.log(
+      '🧭 currentStep =',
+      this.testState?.currentStep,
+      'mode =',
+      this.mode
+    );
     console.log('Navigating to next step...', this.hasUnsavedChanges());
     if (this.hasUnsavedChanges() && this.mode === 'edit') {
       this.pendingStep = (this.testState?.currentStep ?? 1) + 1;
@@ -461,7 +478,7 @@ export class TestWeightsComponent {
 
     if (this.hasUnsavedChanges() && this.mode === 'new') {
       this.toast.show({
-        message: 'Please save your changes before proceeding',
+        message: 'Please save changes before proceeding',
         type: 'warning',
       });
       return;
@@ -480,6 +497,12 @@ export class TestWeightsComponent {
     this.toast.show({ message: 'Going to next step...', type: 'info' });
 
     setTimeout(() => {
+      console.log(
+        '[navigate()] actual currentStep =',
+        this.testState?.currentStep,
+        'mode =',
+        this.mode
+      );
       const route =
         this.testState?.currentStep === 6
           ? ['/test-norms/new']
@@ -498,6 +521,18 @@ export class TestWeightsComponent {
     this.navigateToStep(step);
   }
 
+  navigateToStep(step: number): void {
+    const id = this.testId || this.sessionStorage.getTestId();
+    const currentStep = this.testState?.currentStep ?? 1;
+
+    if (!id || !stepRoutes[step]) return;
+
+    const isForward = step > currentStep;
+    const route = isForward ? stepRoutesNew[step]() : stepRoutes[step](id);
+
+    this.router.navigate(route);
+  }
+
   onConfirmNavigation(): void {
     if (this.pendingStep !== null) {
       this.navigateToStep(this.pendingStep);
@@ -505,19 +540,13 @@ export class TestWeightsComponent {
     this.resetNavigationState();
   }
 
-  navigateToStep(step: number): void {
-    const id = this.testId || this.sessionStorage.getTestId();
-    if (!id || !stepRoutes[step]) return;
-    this.router.navigate(stepRoutes[step](id));
+  onCancelNavigation(): void {
+    this.resetNavigationState();
   }
 
   resetNavigationState(): void {
     this.confirmNavigationVisible = false;
     this.pendingStep = null;
-  }
-
-  onCancelNavigation(): void {
-    this.resetNavigationState();
   }
 
   getNumberOfAnswersForBlock(blockId: number): number[] {
@@ -1007,5 +1036,26 @@ export class TestWeightsComponent {
 
   ngOnDestroy() {
     window.removeEventListener('beforeunload', this.beforeUnloadHandler);
+  }
+
+  getContainerWidthClass(): string {
+    const maxScalesPerBlock = Math.max(
+      ...this.blocks.map((b) => this.getScalesForBlock(b.id!).length)
+    );
+    return maxScalesPerBlock <= 2 ? 'max-w-[50vw]' : 'max-w-[80vw]';
+  }
+
+  private disableAllWeightControls(): void {
+    for (const block of Object.values(this.weightsPerScale)) {
+      for (const scale of Object.values(block)) {
+        for (const group of Object.values(scale)) {
+          group.disable({ emitEvent: false });
+        }
+      }
+    }
+  }
+
+  get weightsAreLocked(): boolean {
+    return (this.testState?.currentStep ?? 1) >= 7;
   }
 }

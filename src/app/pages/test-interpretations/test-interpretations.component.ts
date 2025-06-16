@@ -15,7 +15,7 @@ import {
   ReactiveFormsModule,
 } from '@angular/forms';
 import { TestService } from '../../services/test.service';
-import { stepRoutes } from '../../constants/step-routes';
+import { stepRoutes, stepRoutesNew } from '../../constants/step-routes';
 import { ProgressBarComponent } from '../../components/progress-bar/progress-bar.component';
 import { first, firstValueFrom } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -78,7 +78,8 @@ export class TestInterpretationsComponent {
     this.testId = id;
     this.mode = mode;
     this.sessionStorage.setTestId(id);
-
+    window.addEventListener('beforeunload', this.beforeUnloadHandler);
+      
     await firstValueFrom(
       this.testContextService.ensureContext(this.testId, this.mode, 8)
     );
@@ -107,7 +108,7 @@ export class TestInterpretationsComponent {
           console.log('No interpretations found for testId:', this.testId);
         }
       });
-    window.addEventListener('beforeunload', this.beforeUnloadHandler);
+
   }
 
   interpretationsPerScale: { [scaleId: number]: FormArray<FormGroup> } = {};
@@ -411,10 +412,16 @@ export class TestInterpretationsComponent {
 
   navigateToStep(step: number): void {
     const id = this.testId || this.sessionStorage.getTestId();
-    if (!id || !stepRoutes[step]) return;
-    this.router.navigate(stepRoutes[step](id));
-  }
+    const currentStep = this.testState?.currentStep ?? 1;
 
+    if (!id || !stepRoutes[step]) return;
+
+    const isForward = step > currentStep;
+    const route = isForward ? stepRoutesNew[step]() : stepRoutes[step](id);
+
+    this.router.navigate(route);
+  }
+  
   confirmNavigationVisible = false;
   confirmNavigationMessage =
     'Are you sure you want to proceed? All unsaved changes will be lost';

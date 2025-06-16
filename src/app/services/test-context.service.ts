@@ -62,6 +62,7 @@ export class TestContextService {
     step: number,
     force: boolean = false
   ): Observable<FullTestContext> {
+    
     const stepDependencies: Record<number, ContextSection[]> = {
       1: ['test'],
       2: ['test', 'blocks'],
@@ -69,11 +70,17 @@ export class TestContextService {
       4: ['test', 'blocks', 'questions'],
       5: ['test', 'blocks', 'questions', 'answers'],
       6: ['test', 'blocks', 'scales', 'questions', 'answers', 'weights'],
-      7: ['test', 'scales', 'norms'],
+      7: ['test', 'scales', 'norms', 'weights'],
       8: ['test', 'scales', 'interpretations'],
     };
 
     const include = stepDependencies[step] ?? ['test'];
+    console.log('[TCS] loadContextIfNeeded called with:', {
+  testId,
+  mode,
+  step,
+  include,
+});
 
     const defaultEmpty: FullTestContext = {
       test: null,
@@ -86,7 +93,7 @@ export class TestContextService {
       interpretations: null,
     };
 
-    if (!testId || mode === 'new') {
+    if (!testId) {
       this.context$.next(defaultEmpty);
       this.contextLoaded = true;
       this.currentTestId = null;
@@ -148,10 +155,14 @@ export class TestContextService {
     mode: string,
     step: number
   ): Observable<FullTestContext> {
+    console.log(`[TCS] ensureContext called with: testId=${testId}, mode=${mode}, step=${step}`);
+
+
     return this.loadContextIfNeeded(testId, mode, step, false);
   }
 
   getContext(): Observable<FullTestContext> {
+    console.log('[TCS] getContext called');
     return this.context$.asObservable();
   }
 
@@ -176,6 +187,7 @@ export class TestContextService {
   }
 
   getWeights(): Observable<Weight[] | null> {
+
     return this.context$.pipe(map((ctx) => ctx.weights));
   }
 

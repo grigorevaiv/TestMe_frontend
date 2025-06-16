@@ -1,130 +1,135 @@
-<app-header />
+<div class="min-h-screen flex flex-col">
+  <!-- Хедер -->
+  <app-header />
 
-@if (testStarted() && blockIds.length && !testCompleted()) {
-  <div class="w-full mb-4 space-y-2">
-    @for (blockId of blockIds; track blockId) {
+  <!-- Основной контент -->
+  <main class="flex-1 flex flex-col">
+    <!-- Прогресс по блокам -->
+    @if (testStarted() && blockIds.length && !testCompleted()) {
+    <div class="w-full px-0 mx-0 space-y-2">
+      @for (blockId of blockIds; track blockId) {
       <div class="relative bg-gray-200 h-6 rounded overflow-hidden">
-        <div class="bg-green-500 h-full transition-all duration-500"
-             [style.width.%]="getBlockProgress(blockId) * 100">
-        </div>
+        <div
+          class="bg-green-500 h-full transition-all duration-500"
+          [style.width.%]="getBlockProgress(blockId) * 100"
+        ></div>
 
         @if (block()?.id === blockId && block()?.hasTimeLimit && timeLeft() !== null) {
-          <div class="absolute right-4 top-1/2 -translate-y-1/2 text-black font-semibold text-base z-10 pointer-events-none">
-            Time left {{ timeLeft() }} sec
-          </div>
+        <div
+          class="absolute right-4 top-1/2 -translate-y-1/2 text-black font-semibold text-base z-10 pointer-events-none"
+        >
+          Time left {{ timeLeft() }} sec
+        </div>
         }
       </div>
 
       <p class="ml-2 text-sm text-gray-600">
         Block {{ block().order }}: {{ block().name }}
       </p>
-    }
-  </div>
-}
-
-<!-- Модалка: таймер истёк -->
-@if (blockTimeout()) {
-  <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-white rounded-2xl p-6 shadow-xl max-w-sm text-center animate-fade-in">
-      <h2 class="text-xl font-semibold text-blue-900 mb-4">Time is up</h2>
-      <p class="text-gray-700 mb-6">
-        Redirecting to next block in 10 seconds...
-      </p>
-      <button (click)="continueAfterTimeout()"
-              class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
-        Go now
-      </button>
+      }
     </div>
-  </div>
-}
+    }
 
-<!-- Инструкции перед началом теста -->
-@if (!testStarted() && !testCompleted()) {
-  <div class="min-h-screen flex items-center justify-center px-4">
-    <div class="max-w-2xl w-full bg-white p-6 rounded-xl shadow border border-blue-100">
-      <h1 class="text-2xl font-semibold text-blue-900 mb-4 text-center">
-        {{ test.title }}
-      </h1>
-      <p class="text-gray-600 mb-6 text-center">
-        {{ test.instructions }}
-      </p>
-      <div class="flex justify-center">
-        <button (click)="startTest()"
-                class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 transition">
-          Start test
+    <!-- Таймер истёк -->
+    @if (blockTimeout()) {
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-2xl p-6 shadow-xl max-w-sm text-center animate-fade-in">
+        <h2 class="text-xl font-semibold text-blue-900 mb-4">Time is up</h2>
+        <p class="text-gray-700 mb-6">
+          Redirecting to next block in 10 seconds...
+        </p>
+        <button
+          (click)="continueAfterTimeout()"
+          class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+        >
+          Go now
         </button>
       </div>
     </div>
-  </div>
-}
-
-
-<!-- Начало блока -->
-@if (testStarted() && block() && !blockStarted() && !testCompleted()) {
-  <div class="max-w-xl mx-auto bg-white p-6 rounded-xl shadow border border-blue-100 mt-24 text-center">
-    <h1 class="text-xl font-semibold text-blue-900 mb-2">{{ block().name }}</h1>
-    <p class="text-gray-700 mb-4">{{ block().instructions }}</p>
-    <button (click)="startBlock()"
-            class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition">
-      Start block
-    </button>
-  </div>
-}
-
-<!-- Вопросы -->
-@if (question() && blockStarted()) {
-  <div class="w-full mx-auto p-4 mt-10 text-center">
-    <h2 class="text-lg font-semibold text-blue-800 mb-4 break-words">
-      {{ question().text }}
-    </h2>
-
-    @if (question().imageUrl) {
-      <img [src]="question().imageUrl" alt="Question Image"
-           class="w-[400px] h-[300px] object-cover mb-4 rounded mx-auto">
     }
 
-    @if (question().questionAnswers?.length) {
-      <form class="space-y-3 flex flex-col items-center">
-        @for (answer of question().questionAnswers; track answer.id) {
+    <!-- Контейнер, центрирующий по вертикали -->
+    <div class="flex-1 flex items-center justify-center px-4">
+      <!-- Единый экран для инструкций -->
+      @if ((!testStarted() && !testCompleted()) || (testStarted() && block() && !blockStarted() && !testCompleted())) {
+      <div class="max-w-4xl w-full bg-white p-6 rounded-xl">
+        <h1 class="text-2xl font-semibold text-blue-900 mb-4">
+          {{ !testStarted() ? test.title : block().name }}
+        </h1>
+        <p class="text-gray-600 mb-6 text-xl whitespace-pre-line">
+          <span class="font-bold">Instructions:</span><br />
+          {{ !testStarted() ? test.instructions : block().instructions }}
+        </p>
+        <button
+          (click)="!testStarted() ? startTest() : startBlock()"
+          class="bg-sky-700 text-white px-6 py-2 rounded hover:bg-sky-800 transition text-xl cursor-pointer"
+        >
+          {{ !testStarted() ? "Start test" : "Start block" }}
+        </button>
+      </div>
+      }
+
+      <!-- Вопросы -->
+      @if (question() && blockStarted()) {
+      <div class="w-full max-w-4xl p-6 rounded-xl flex flex-col items-center justify-center space-y-6">
+        <h2 class="text-xl font-semibold text-black break-words text-pretty">
+          {{ question().text }}
+        </h2>
+        @if (question().imageUrl) {
+        <img
+          [src]="question().imageUrl"
+          alt="Question Image"
+          class="w-[400px] h-[300px] object-cover mb-4 rounded mx-auto"
+        />
+        }
+        @if (question().questionAnswers?.length) {
+        <form class="space-y-3 flex flex-col items-start">
+          @for (answer of question().questionAnswers; track answer.id) {
           <label class="flex items-start space-x-3 text-gray-700 break-words max-w-full">
-            <input 
+            <input
               [type]="block().questionsType === 'single-choice' ? 'radio' : 'checkbox'"
               [name]="block().questionsType === 'single-choice' ? 'question_' + question().id : 'answer_' + answer.id"
               [value]="answer.id"
               [checked]="selectedAnswers.includes(answer.id.toString())"
-              (change)="updateSelectedAnswers($event)" 
+              (change)="updateSelectedAnswers($event)"
               class="accent-blue-600 mt-1"
             />
-            <span class="break-words text-left">{{ answer.text }}</span>
+            <span class="break-words text-left text-xl">{{ answer.text }}</span>
           </label>
+          }
+        </form>
         }
-      </form>
-    } @else {
-      <p class="text-red-500 mt-4">Answers not found</p>
-    }
+        <div class="flex flex-row justify-around mt-6 w-full">
+          <button
+            (click)="prev()"
+            class="text-sky-700 border border-sky-700 px-4 py-2 rounded hover:bg-sky-700 hover:text-white transition w-1/4"
+          >
+            ← Previous
+          </button>
+          <button
+            (click)="next()"
+            class="bg-sky-700 text-white px-4 py-2 rounded shadow hover:bg-sky-800 transition w-1/4"
+          >
+            Next →
+          </button>
+        </div>
+      </div>
+      }
 
-<div class="flex justify-center gap-6 mt-6">
-  <button (click)="prev()"
-          class="text-blue-600 border border-blue-600 px-4 py-2 rounded hover:bg-blue-600 hover:text-white">
-    ← Previous
-  </button>
-  <button (click)="next()"
-          class="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700">
-    Next →
-  </button>
+      <!-- Завершение теста -->
+      @if (testCompleted()) {
+      <div class="max-w-2xl w-full bg-white p-8 rounded-2xl text-center">
+        <p class="text-2xl font-semibold text-blue-900 mb-4">
+          Thank you! Your results are saved
+        </p>
+        <p class="text-gray-700 text-lg">
+          Please contact your doctor for more information
+        </p>
+      </div>
+      }
+    </div>
+  </main>
+
+  <!-- Футер -->
+  <app-footer />
 </div>
-  </div>
-}
-
-
-
-<!-- Завершение теста -->
-@if (testCompleted()) {
-  <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow border border-blue-100 mt-24 text-center">
-    <p class="text-xl font-semibold mb-4">
-      Thank you, your results are saved. Please contact your doctor for more information.
-    </p>
-  </div>
-}
-
-<app-footer />

@@ -14,7 +14,7 @@ import { ToastService } from '../../services/toast.service';
 import { ConfirmDialogComponent } from '../../components/confirm-dialog/confirm-dialog.component';
 
 import { ProgressBarComponent } from '../../components/progress-bar/progress-bar.component';
-import { stepRoutes } from '../../constants/step-routes';
+import { stepRoutes, stepRoutesNew } from '../../constants/step-routes';
 import { SessionStorageService } from '../../services/session-storage.service';
 import { TestContextService } from '../../services/test-context.service';
 import { NgIf } from '@angular/common';
@@ -22,9 +22,16 @@ import { StepRedirectService } from '../../services/step-redirect.service';
 
 @Component({
   selector: 'app-test-blocks',
-  imports: [ReactiveFormsModule, SentencecasePipe, ListItemComponent, ConfirmDialogComponent, ProgressBarComponent, NgIf],
+  imports: [
+    ReactiveFormsModule,
+    SentencecasePipe,
+    ListItemComponent,
+    ConfirmDialogComponent,
+    ProgressBarComponent,
+    NgIf,
+  ],
   templateUrl: './test-blocks.component.html',
-  styleUrl: './test-blocks.component.css'
+  styleUrl: './test-blocks.component.css',
 })
 export class TestBlocksComponent {
   private fb = inject(FormBuilder);
@@ -61,7 +68,7 @@ export class TestBlocksComponent {
     numberOfQuestions: [5, [Validators.required, Validators.min(5)]],
     questionsType: ['single-choice', [Validators.required]],
     numberOfAnswers: [3, [Validators.required, Validators.min(2)]],
-    testId: this.testId
+    testId: this.testId,
   });
 
   async ngOnInit(): Promise<void> {
@@ -71,12 +78,13 @@ export class TestBlocksComponent {
     const id = idParam ? Number(idParam) : storedId;
 
     if (id) {
-      const redirected = await this.stepRedirectService.redirectIfStepAlreadyCompleted(
-        mode,
-        id,
-        2,
-        (id) => ['/test-blocks/edit', id]
-      );
+      const redirected =
+        await this.stepRedirectService.redirectIfStepAlreadyCompleted(
+          mode,
+          id,
+          2,
+          (id) => ['/test-blocks/edit', id]
+        );
       if (redirected) return;
     }
 
@@ -85,43 +93,54 @@ export class TestBlocksComponent {
       return;
     }
 
+    this.addValidatorsToForm();
+    window.addEventListener(
+      'beforeunload',
+      this.beforeUnloadHandler.bind(this)
+    );
+
     this.testId = id;
     this.mode = mode;
 
-    await firstValueFrom(this.testContextService.ensureContext(this.testId, this.mode, 2));
+    await firstValueFrom(
+      this.testContextService.ensureContext(this.testId, this.mode, 2)
+    );
 
-    this.testContextService.getTest().subscribe(test => {
-      if (test) {
-        this.testState = test.state ?? null;
-      }
-    });
+    const test = await firstValueFrom(this.testContextService.getTest());
+    console.log('Test:', test);
+    this.testState = test?.state ?? null;
 
-    this.testContextService.getBlocks().subscribe(blocks => {
+    this.testContextService.getBlocks().subscribe((blocks) => {
       this.blocks = blocks || [];
     });
 
-    this.addValidatorsToForm();
-    window.addEventListener('beforeunload', this.beforeUnloadHandler.bind(this));
+    console.log('Test blocks:', this.blocks);
+    console.log('Pending blocks:', this.pendingBlocks);
   }
 
   beforeUnloadHandler(event: BeforeUnloadEvent) {
     if (this.pendingBlocks.length > 0) {
       event.preventDefault();
-      event.returnValue = 'You have unsaved blocks. Are you sure you want to leave?';
+      event.returnValue =
+        'You have unsaved blocks. Are you sure you want to leave?';
       return event;
     }
     return;
   }
 
   private addValidatorsToForm() {
-    this.newBlockForm.get('hasTimeLimit')?.valueChanges.subscribe((hasTimeLimit) => {
-      if (hasTimeLimit) {
-        this.newBlockForm.get('timeLimit')?.setValidators([Validators.required, Validators.min(10)]);
-      } else {
-        this.newBlockForm.get('timeLimit')?.clearValidators();
-      }
-      this.newBlockForm.get('timeLimit')?.updateValueAndValidity();
-    });
+    this.newBlockForm
+      .get('hasTimeLimit')
+      ?.valueChanges.subscribe((hasTimeLimit) => {
+        if (hasTimeLimit) {
+          this.newBlockForm
+            .get('timeLimit')
+            ?.setValidators([Validators.required, Validators.min(10)]);
+        } else {
+          this.newBlockForm.get('timeLimit')?.clearValidators();
+        }
+        this.newBlockForm.get('timeLimit')?.updateValueAndValidity();
+      });
   }
 
   get completedStepsArray(): number[] {
@@ -130,11 +149,20 @@ export class TestBlocksComponent {
   }
 
   addNewBlock() {
+    if ((this.testState?.currentStep ?? 1) > 2) {
+      this.toast.show({
+        message: 'Cannot add blocks after scales are defined',
+        type: 'warning',
+      });
+      return;
+    }
+
     if (this.newBlockForm.invalid) {
       this.newBlockForm.markAllAsTouched();
       this.toast.show({
-        message: 'Please fill in all required fields correctly before adding a block',
-        type: 'warning'
+        message:
+          'Please fill in all required fields correctly before adding a block',
+        type: 'warning',
       });
       return;
     }
@@ -174,7 +202,15 @@ export class TestBlocksComponent {
   }
 
   onEditBlock(block: Block): void {
-    const isPending = !block.id;
+    const currentStep = this.testState?.currentStep ?? 1;
+    const controlsToTemporarilyEnable = [
+      'numberOfQuestions',
+      'numberOfAnswers',
+      'questionsType',
+    ];
+    controlsToTemporarilyEnable.forEach((controlName) => {
+      this.newBlockForm.get(controlName)?.enable({ emitEvent: false });
+    });
     this.newBlockForm.patchValue({
       name: block.name,
       instructions: block.instructions,
@@ -186,15 +222,37 @@ export class TestBlocksComponent {
       numberOfAnswers: block.numberOfAnswers,
       timeLimit: block.timeLimit,
     });
+    console.log('form after patch:', this.newBlockForm.getRawValue());
+
+    if (currentStep >= 4) {
+      this.newBlockForm.get('numberOfAnswers')?.disable();
+      this.newBlockForm.get('numberOfQuestions')?.disable();
+    } else {
+      this.newBlockForm.get('numberOfAnswers')?.enable();
+      this.newBlockForm.get('numberOfQuestions')?.enable();
+    }
+
+    if (currentStep >= 6) {
+      this.newBlockForm.get('questionsType')?.disable();
+    } else {
+      this.newBlockForm.get('questionsType')?.enable();
+    }
 
     this.editingBlockId = block.id ?? null;
     this.isEditing = true;
     this.selectedBlock = block;
   }
 
-
   selectedBlock: Block | null = null;
   confirmDelete(block: Block) {
+    if ((this.testState?.currentStep ?? 1) > 2) {
+      this.toast.show({
+        message: 'You cannot delete blocks after defining scales',
+        type: 'warning',
+      });
+      return;
+    }
+
     this.selectedBlock = block;
     this.showDeleteDialog = true;
   }
@@ -205,15 +263,26 @@ export class TestBlocksComponent {
     const block = this.selectedBlock;
 
     if (!block.id) {
-      this.pendingBlocks = this.pendingBlocks.filter(b => b !== block);
+      this.pendingBlocks = this.pendingBlocks.filter((b) => b !== block);
       this.toast.show({ message: 'Block removed', type: 'info' });
     } else if (this.testId) {
       try {
-        await firstValueFrom(this.testService.deleteBlock(this.testId, block.id));
-        this.toast.show({ message: 'Block deleted successfully', type: 'success' });
-        await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', 2, true));
-      }
-      catch (error) {
+        await firstValueFrom(
+          this.testService.deleteBlock(this.testId, block.id)
+        );
+        this.toast.show({
+          message: 'Block deleted successfully',
+          type: 'success',
+        });
+        await firstValueFrom(
+          this.testContextService.loadContextIfNeeded(
+            this.testId,
+            'edit',
+            2,
+            true
+          )
+        );
+      } catch (error) {
         console.error('Error deleting block:', error);
         this.toast.show({ message: 'Failed to delete block', type: 'error' });
         return;
@@ -241,29 +310,48 @@ export class TestBlocksComponent {
       timeLimit: rawForm.timeLimit ?? 0,
       randomizeQuestions: rawForm.randomizeQuestions ?? false,
       randomizeAnswers: rawForm.randomizeAnswers ?? false,
-      numberOfQuestions: rawForm.numberOfQuestions ?? 0,
-      questionsType: rawForm.questionsType ?? 'single-choice',
-      numberOfAnswers: rawForm.numberOfAnswers ?? 0,
+      numberOfQuestions: this.newBlockForm.get('numberOfQuestions')?.value ?? 0,
+      questionsType: this.newBlockForm.get('questionsType')?.value ?? 'single-choice',
+      numberOfAnswers: this.newBlockForm.get('numberOfAnswers')?.value ?? 0,
     };
-
     const updatedBlock: Block = {
       ...this.selectedBlock,
       ...cleanedForm,
     };
 
+
     if (!this.selectedBlock.id) {
-      const index = this.pendingBlocks.findIndex(b => b === this.selectedBlock);
+      const index = this.pendingBlocks.findIndex(
+        (b) => b === this.selectedBlock
+      );
       if (index !== -1) {
         this.pendingBlocks[index] = updatedBlock;
-        this.toast.show({ message: 'Block updated', type: 'success' });
+        this.toast.show({
+          message: 'Block updated successfully',
+          type: 'success',
+        });
       }
     } else if (this.testId) {
       updatedBlock.testId = this.testId;
       await firstValueFrom(
-        this.testService.updateBlock(this.testId, updatedBlock.id!, updatedBlock)
+        this.testService.updateBlock(
+          this.testId,
+          updatedBlock.id!,
+          updatedBlock
+        )
       );
-      this.toast.show({ message: 'Block updated successfully!', type: 'success' });
-      await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', 2, true));
+      this.toast.show({
+        message: 'Block updated successfully',
+        type: 'success',
+      });
+      await firstValueFrom(
+        this.testContextService.loadContextIfNeeded(
+          this.testId,
+          'edit',
+          2,
+          true
+        )
+      );
     }
 
     this.resetToDefault();
@@ -279,47 +367,85 @@ export class TestBlocksComponent {
 
   isSaved = false;
   confirmDialogVisible = false;
-  confirmDialogMessage = 'Are you sure you want to proceed? All unsaved changes will be lost';
+  confirmDialogMessage =
+    'Are you sure you want to proceed? All unsaved changes will be lost';
   pendingStep: number | null = null;
 
-async saveTest(): Promise<void> {
-  if (this.pendingBlocks.length === 0 && this.blocks.length === 0) {
-    this.toast.show({ message: 'You must add at least one block to save the test', type: 'warning' });
-    return;
+  async saveTest(): Promise<void> {
+    if (this.pendingBlocks.length === 0 && this.blocks.length === 0) {
+      this.toast.show({
+        message: 'You must add at least one block to save the test',
+        type: 'warning',
+      });
+      return;
+    }
+
+    if (!this.testState || !this.testId) return;
+
+    if (this.pendingBlocks.length > 0) {
+      await firstValueFrom(
+        this.testService.addBlocksBatch(this.testId, this.pendingBlocks)
+      );
+      this.toast.show({ message: 'All blocks saved', type: 'success' });
+      await firstValueFrom(
+        this.testContextService.loadContextIfNeeded(
+          this.testId,
+          this.mode,
+          2,
+          true
+        )
+      );
+      this.pendingBlocks = [];
+    }
+    this.isSaved = true;
+
+    if (this.testState.currentStep < 2) {
+      this.testState.currentStep = 2;
+      await firstValueFrom(
+        this.testService.updateTestStateStep(this.testId, this.testState)
+      );
+      await firstValueFrom(
+        this.testContextService.loadContextIfNeeded(
+          this.testId,
+          'edit',
+          2,
+          true
+        )
+      );
+      this.router.navigate(['/test-blocks/edit', this.testId]);
+      return;
+    }
+
+    this.resourceService.triggerRefresh();
   }
-
-  if (!this.testState || !this.testId) return;
-
-  if (this.pendingBlocks.length > 0) {
-    await firstValueFrom(this.testService.addBlocksBatch(this.testId, this.pendingBlocks));
-    this.toast.show({ message: 'All blocks saved', type: 'success' });
-    await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, this.mode, 2, true));
-    this.pendingBlocks = [];
-  }
-
-  if (this.testState.currentStep < 2) {
-    this.testState.currentStep = 2;
-    await firstValueFrom(this.testService.updateTestStateStep(this.testId, this.testState));
-    await firstValueFrom(this.testContextService.loadContextIfNeeded(this.testId, 'edit', 2, true));
-    this.router.navigate(['/test-blocks/edit', this.testId]);
-    return;
-  }
-
-  this.resourceService.triggerRefresh();
-}
 
   navigate(): void {
-    if (this.pendingBlocks.length === 0) {
+    const hasUnsaved =
+      this.pendingBlocks.length > 0 || this.blocks.length === 0;
+    console.log('Has unsaved blocks:', hasUnsaved);
+    console.log('Is saved:', this.isSaved);
+    if (!hasUnsaved) {
       this.toast.show({ message: 'Going to next step...', type: 'info' });
+
       setTimeout(() => {
-        const route = this.testState?.currentStep === 2 ? ['/test-scales/new'] : ['/test-scales/edit', this.testId];
+        const route =
+          this.testState?.currentStep === 2
+            ? ['/test-scales/new']
+            : ['/test-scales/edit', this.testId];
         this.router.navigate(route);
       }, 700);
-    } else {
+      return;
+    }
+
+    if (hasUnsaved) {
       if (this.mode === 'new') {
-        this.toast.show({ message: 'Please save the test before proceeding', type: 'warning' });
+        this.toast.show({
+          message: 'Please save the test before proceeding',
+          type: 'warning',
+        });
       } else {
-        this.pendingStep = (this.testState?.currentStep ?? 1) + 1;
+        this.pendingStep = this.step + 1;
+        console.log('Pending step:', this.pendingStep);
         this.confirmDialogVisible = true;
       }
     }
@@ -327,11 +453,16 @@ async saveTest(): Promise<void> {
 
   getError(field: string): string | null {
     const control = this.newBlockForm.get(field);
-    return control && control.touched ? this.validationService.getErrorMessage(control, field) : null;
+    return control && control.touched
+      ? this.validationService.getErrorMessage(control, field)
+      : null;
   }
 
   ngOnDestroy() {
-    window.removeEventListener('beforeunload', this.beforeUnloadHandler.bind(this));
+    window.removeEventListener(
+      'beforeunload',
+      this.beforeUnloadHandler.bind(this)
+    );
     if (this.routeParamSubscription) {
       this.routeParamSubscription.unsubscribe();
     }
@@ -352,7 +483,6 @@ async saveTest(): Promise<void> {
     this.confirmDialogVisible = true;
   }
 
-
   onConfirmNavigation(): void {
     if (this.pendingStep !== null) {
       this.navigateToStep(this.pendingStep);
@@ -362,8 +492,14 @@ async saveTest(): Promise<void> {
 
   navigateToStep(step: number): void {
     const id = this.testId || this.sessionStorage.getTestId();
+    const currentStep = this.testState?.currentStep ?? 1;
+
     if (!id || !stepRoutes[step]) return;
-    this.router.navigate(stepRoutes[step](id));
+
+    const isForward = step > currentStep;
+    const route = isForward ? stepRoutesNew[step]() : stepRoutes[step](id);
+
+    this.router.navigate(route);
   }
 
   resetNavigationState(): void {
@@ -374,7 +510,4 @@ async saveTest(): Promise<void> {
   onCancelNavigation(): void {
     this.resetNavigationState();
   }
-
 }
-
-

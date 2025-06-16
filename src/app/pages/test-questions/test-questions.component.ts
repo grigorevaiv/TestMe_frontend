@@ -17,7 +17,7 @@ import {
   Validators,
 } from '@angular/forms';
 import { TestService } from '../../services/test.service';
-import { firstValueFrom } from 'rxjs';
+import { combineLatest, firstValueFrom } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ValidationService } from '../../services/validation.service';
 import { ViewChild } from '@angular/core';
@@ -27,7 +27,7 @@ import { NgClass, NgIf } from '@angular/common';
 import { ToastService } from '../../services/toast.service';
 import { SessionStorageService } from '../../services/session-storage.service';
 import { ProgressBarComponent } from '../../components/progress-bar/progress-bar.component';
-import { stepRoutes } from '../../constants/step-routes';
+import { stepRoutes, stepRoutesNew } from '../../constants/step-routes';
 import { ConfirmDialogComponent } from '../../components/confirm-dialog/confirm-dialog.component';
 import { TestContextService } from '../../services/test-context.service';
 import { StepRedirectService } from '../../services/step-redirect.service';
@@ -100,6 +100,7 @@ export class TestQuestionsComponent {
     this.mode = mode;
     this.isEditMode = this.mode !== 'new';
     this.sessionStorage.setTestId(id);
+    window.addEventListener('beforeunload', this.beforeUnloadHandler);
 
     await firstValueFrom(
       this.testContextService.ensureContext(this.testId, this.mode, 4)
@@ -109,19 +110,25 @@ export class TestQuestionsComponent {
       this.testState = test?.state ?? null;
     });
 
-    this.testContextService.getBlocks().subscribe((blocks) => {
+    combineLatest([
+      this.testContextService.getBlocks(),
+      this.testContextService.getQuestions(),
+    ]).subscribe(([blocks, questions]) => {
       this.blocks = blocks || [];
-    });
-
-    this.testContextService.getQuestions().subscribe((questions) => {
       this.questions = questions || [];
-    });
 
-    this.initializeQuestionsForms();
-    window.addEventListener('beforeunload', this.beforeUnloadHandler);
+      this.initializeQuestionsForms();
+    });
   }
 
   addQuestionToBlock(block: Block) {
+    if ((this.testState?.currentStep ?? 1) > 4) {
+      this.toast.show({
+        message: 'You cannot add questions after defining answers',
+        type: 'warning',
+      });
+      return;
+    }
     const formArray = this.questionsOfBlock[block.id!];
 
     if (formArray) {
@@ -147,8 +154,6 @@ export class TestQuestionsComponent {
     if (formArray && formArray.length > 1) {
       const controlToRemove = formArray.at(index);
       const removedId = controlToRemove?.get('id')?.value;
-
-      console.log('Удаляем вопрос с ID:', removedId);
 
       if (removedId) {
         this.questionsToDelete.push(removedId);
@@ -528,14 +533,21 @@ export class TestQuestionsComponent {
         this.testService.updateTestStateStep(this.testId!, this.testState)
       );
       await firstValueFrom(
-        this.testContextService.loadContextIfNeeded(this.testId!, 'edit', 4, true)
+        this.testContextService.loadContextIfNeeded(
+          this.testId!,
+          'edit',
+          4,
+          true
+        )
       );
       this.router.navigate(['/test-questions/edit', this.testId]);
     }
   }
 
   navigate() {
-    const unsaved = this.hasUnsavedChanges();
+    console.log('Has invalid questions:', this.hasInvalidQuestions());
+    const unsaved = this.hasUnsavedChanges() || this.hasInvalidQuestions();
+    console.log('Unsaved changes:', unsaved);
     if (unsaved && this.mode === 'edit') {
       this.pendingStep = (this.testState?.currentStep ?? 1) + 1;
       this.confirmNavigationVisible = true;
@@ -580,8 +592,14 @@ export class TestQuestionsComponent {
 
   navigateToStep(step: number): void {
     const id = this.testId || this.sessionStorage.getTestId();
+    const currentStep = this.testState?.currentStep ?? 1;
+
     if (!id || !stepRoutes[step]) return;
-    this.router.navigate(stepRoutes[step](id));
+
+    const isForward = step > currentStep;
+    const route = isForward ? stepRoutesNew[step]() : stepRoutes[step](id);
+
+    this.router.navigate(route);
   }
 
   resetNavigationState(): void {
@@ -757,12 +775,20 @@ export class TestQuestionsComponent {
   pendingDeleteQuestionIndex: number | null = null;
 
   askDeleteConfirmation(blockId: number, index: number) {
+    if ((this.testState?.currentStep ?? 1) > 4) {
+      this.toast.show({
+        message: 'You cannot delete questions after defining answers',
+        type: 'warning',
+      });
+      return;
+    }
     this.pendingDeleteBlockId = blockId;
     this.pendingDeleteQuestionIndex = index;
     this.confirmDialogVisible = true;
   }
 
   onConfirmDelete() {
+
     if (
       this.pendingDeleteBlockId !== null &&
       this.pendingDeleteQuestionIndex !== null

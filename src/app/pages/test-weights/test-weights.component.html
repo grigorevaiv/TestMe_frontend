@@ -8,7 +8,7 @@
     [maxAllowedStep]="testState.currentStep"
   ></app-progress-bar>
 
-  <div class="w-full max-w-[50vw] mx-auto">
+  <div class="w-full mx-auto" [ngClass]="getContainerWidthClass()">
     <h1 class="text-xl sm:text-2xl font-semibold text-gray-800 mb-6">
       Define weights
     </h1>
@@ -74,11 +74,13 @@
                     onCheckboxChange($event, block.id!, scale.id!, answer.id!)
                   "
                   class="form-checkbox h-4 w-4 text-sky-600"
+                  [disabled]="weightsAreLocked"
                 />
               </td>
               } @else if (scale.scaleType == 'bipolar') {
-              <td class="text-center" colspan="2">
+              <td class="text-center">
                 <select
+                  [disabled]="weightsAreLocked"
                   [formControl]="
                     getValueControl(block.id!, scale.id!, answer.id!)
                   "
@@ -136,22 +138,26 @@
         >
           Gradual scale must contain only unique values.
         </p>
+        <p *ngIf="weightsAreLocked" class="text-sm text-gray-500 mt-4">
+          Weights are locked because norms have already been defined
+        </p>
       </div>
       }
     </div>
     }
 
     <!-- Кнопки -->
-    <div class="flex flex-col sm:flex-row justify-end gap-4 mt-8">
+    <div class="flex flex-col sm:flex-row justify-between gap-4 mt-8">
       <button
-        class="w-full sm:w-auto bg-sky-700 hover:bg-sky-800 text-white text-sm sm:text-base font-medium px-6 py-2 rounded transition"
+        class="w-full sm:w-auto bg-sky-700 hover:bg-sky-800 text-white text-sm sm:text-base font-medium px-6 py-2 rounded transition disabled:bg-gray-400"
         (click)="saveWeights()"
+        [disabled]="weightsAreLocked"
       >
         Save
       </button>
 
       <button
-        class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white text-sm sm:text-base font-medium px-6 py-2 rounded transition"
+        class="w-full sm:w-auto bg-sky-700 hover:bg-green-800 text-white text-sm sm:text-base font-medium px-6 py-2 rounded transition"
         (click)="navigate()"
       >
         Next →

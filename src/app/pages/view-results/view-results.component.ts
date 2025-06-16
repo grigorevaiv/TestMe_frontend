@@ -9,12 +9,12 @@ import { catchError, forkJoin, of } from 'rxjs';
 import { TestService } from '../../services/test.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { TimeFilterComponent } from '../../components/time-filter/time-filter.component';
+import { SearchFilterComponent } from '../../components/search-filter/search-filter.component';
 declare let pdfMake: any;
-
 
 @Component({
   selector: 'app-view-results',
-  imports: [NgIf, NgFor, DatePipe, NgClass, TimeFilterComponent],
+  imports: [NgIf, NgFor, DatePipe, NgClass, TimeFilterComponent, SearchFilterComponent],
   templateUrl: './view-results.component.html',
   styleUrl: './view-results.component.css',
 })
@@ -25,10 +25,12 @@ export class ViewResultsComponent {
   private testService = inject(TestService);
   private patientService = inject(PatientService);
   private toast = inject(ToastService);
+
   patientId: number | null = null;
   patientEmail: string | null = null;
   tests: Test[] = [];
   patientFullName: string | null = null;
+  isPatientActive: boolean = false;
 
   constructor() {
     effect(() => {
@@ -43,6 +45,10 @@ export class ViewResultsComponent {
     });
   }
 
+  ngOnInit() {
+    this.initializeRouteParams();
+  }
+
   initializeRouteParams(): void {
     this.route.paramMap.subscribe((params) => {
       const idParam = params.get('patientId');
@@ -54,6 +60,7 @@ export class ViewResultsComponent {
           next: (patient) => {
             this.patientEmail = patient.email;
             this.patientFullName = `${patient.firstName} ${patient.lastName}`;
+            this.isPatientActive = patient.isActive!;
             console.log('Patient email:', this.patientEmail);
           },
           error: (err) => {
@@ -70,14 +77,18 @@ export class ViewResultsComponent {
     });
   }
 
-  ngOnInit() {
-    this.initializeRouteParams();
-  }
-
   isModalOpen = false;
   selectedTestIds: number[] = [];
 
   openModal() {
+    if (!this.isPatientActive) {
+      this.toast.show({
+        message: 'You can assign tests only to active patients',
+        type: 'warning',
+      });
+      return;
+    }
+
     this.isModalOpen = true;
   }
 
@@ -145,18 +156,50 @@ export class ViewResultsComponent {
   }
 
   results: any[] = [];
+  filteredResults: any[] = [];
+  dateFilter: { fromDate?: string; toDate?: string } = {};
+  searchTerm: string = '';
 
   loadUserResults(userId: number) {
     this.testService.getAllResultsByUser(userId).subscribe({
       next: (data) => {
         this.results = data;
-        this.filteredResults = data;
+        this.reapplyFilters();
         console.log('History:', this.results);
       },
       error: (err) => {
         console.error('Error on obtaining history', err);
       },
     });
+  }
+
+  applyFilter(filter: { fromDate?: string; toDate?: string }) {
+    this.dateFilter = filter;
+    this.reapplyFilters();
+  }
+
+  applySearchTerm(term: string) {
+    this.searchTerm = term.trim().toLowerCase();
+    this.reapplyFilters();
+  }
+
+  reapplyFilters() {
+    const from = this.dateFilter.fromDate ? new Date(this.dateFilter.fromDate) : null;
+    const to = this.dateFilter.toDate ? new Date(this.dateFilter.toDate) : null;
+    if (to) {
+      to.setHours(23, 59, 59, 999);
+    }
+
+    this.filteredResults = this.results.filter((result) => {
+      const date = new Date(result.createdAt);
+      const matchesDate = (!from || date >= from) && (!to || date <= to);
+      const matchesSearch = !this.searchTerm || this.searchMatches(result);
+      return matchesDate && matchesSearch;
+    });
+  }
+
+  searchMatches(result: any): boolean {
+    return result.testTitle?.toLowerCase().includes(this.searchTerm);
   }
 
   groupByBlock(results: any[]): { block: string; scales: any[] }[] {
@@ -183,19 +226,6 @@ export class ViewResultsComponent {
       this.expandedResults.add(id);
     }
   }
-
-  filteredResults: any[] = [];
-
-  applyFilter(filter: { fromDate?: string; toDate?: string }) {
-    const from = filter.fromDate ? new Date(filter.fromDate) : null;
-    const to = filter.toDate ? new Date(filter.toDate) : null;
-
-    this.filteredResults = this.results.filter(result => {
-      const date = new Date(result.createdAt);
-      if (from && date < from) return false;
-      if (to && date > to) return false;
-      return true;
-    });
-  }
-
 }
+
+

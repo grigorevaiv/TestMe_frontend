@@ -42,7 +42,6 @@
           <h2 class="text-lg sm:text-xl font-semibold text-slate-700 mb-3">{{ block.name }}</h2>
 
           @for (question of getQuestionsFormsForBlock(block.id!).controls; track question.get('id')?.value ?? $index; let j = $index) {
-            <p>{{question.dirty}}</p>
             <div
               #questionRef
               class="mb-6 border border-gray-300 rounded-xl p-4 bg-white shadow-sm relative"

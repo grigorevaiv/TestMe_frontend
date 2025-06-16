@@ -1,193 +1,288 @@
 <div class="min-h-screen bg-white pt-6 p-4 sm:px-6 lg:px-8">
-<app-progress-bar
-    *ngIf="testState"   
+  <app-progress-bar
+    *ngIf="testState"
     [step]="step"
     [totalSteps]="8"
     [completedSteps]="completedStepsArray"
     (stepClicked)="onStepSelected($event)"
     [maxAllowedStep]="testState.currentStep"
-    ></app-progress-bar>
+  ></app-progress-bar>
   <div class="max-w-7xl mx-auto">
-
     <!-- Основная зона: форма + список -->
     <div class="flex flex-col lg:flex-row gap-8">
-
       <!-- Левая колонка: форма -->
       <div class="w-full lg:w-1/2">
-        <h1 class="text-xl sm:text-2xl font-semibold text-gray-800 mb-6">Define blocks</h1>
+        <h1 class="text-xl sm:text-2xl font-semibold text-gray-800 mb-6">
+          Define blocks
+        </h1>
         <form [formGroup]="newBlockForm" class="space-y-6">
-
           <!-- Название -->
           <div>
-            <label for="block-name" class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1">
+            <label
+              for="block-name"
+              class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1"
+            >
               Block name <span class="text-red-500">*</span>
             </label>
-            <input type="text" formControlName="name" id="block-name"
+            <input
+              type="text"
+              formControlName="name"
+              id="block-name"
               class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-              placeholder="Enter block name" />
+              placeholder="Enter block name"
+            />
             @if(getError('name')) {
-              <p class="text-red-500 text-sm mt-1">{{ (getError('name') || '') | sentencecase }}</p>
+            <p class="text-red-500 text-sm mt-1">
+              {{ getError("name") || "" | sentencecase }}
+            </p>
             }
           </div>
 
           <!-- Инструкции -->
           <div>
-            <label for="block-instructions" class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1">
+            <label
+              for="block-instructions"
+              class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1"
+            >
               Instructions <span class="text-red-500">*</span>
             </label>
-            <textarea formControlName="instructions" id="block-instructions" rows="4"
+            <textarea
+              formControlName="instructions"
+              id="block-instructions"
+              rows="4"
               class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-              placeholder="Enter block instructions"></textarea>
+              placeholder="Enter block instructions"
+            ></textarea>
             @if(getError('instructions')) {
-              <p class="text-red-500 text-sm mt-1">{{ (getError('instructions') || '') | sentencecase }}</p>
+            <p class="text-red-500 text-sm mt-1">
+              {{ getError("instructions") || "" | sentencecase }}
+            </p>
             }
           </div>
 
           <!-- Кол-во вопросов -->
           <div>
-            <label for="block-questions" class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1">
+            <label
+              for="block-questions"
+              class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1"
+            >
               Number of questions <span class="text-red-500">*</span>
             </label>
-            <input type="number" formControlName="numberOfQuestions" id="block-questions"
-              class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500" />
+            <input
+              type="number"
+              formControlName="numberOfQuestions"
+              id="block-questions"
+              class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            />
             @if(getError('numberOfQuestions')) {
-              <p class="text-red-500 text-sm mt-1">{{ (getError('numberOfQuestions') || '') | sentencecase }}</p>
+            <p class="text-red-500 text-sm mt-1">
+              {{ getError("numberOfQuestions") || "" | sentencecase }}
+            </p>
+            } @if(newBlockForm.get('numberOfQuestions')?.disabled) {
+            <p class="text-gray-500 text-xs mt-1">
+              Number of questions cannot be changed after questions are defined
+            </p>
             }
           </div>
 
           <!-- Тип вопросов -->
           <div>
-            <label for="block-type" class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1">
+            <label
+              for="block-type"
+              class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1"
+            >
               Type of questions <span class="text-red-500">*</span>
             </label>
-            <select formControlName="questionsType" id="block-type"
-              class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm bg-white text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+            <select
+              formControlName="questionsType"
+              id="block-type"
+              class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm bg-white text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            >
               <option value="single-choice">Single choice</option>
               <option value="multiple-choice">Multiple choice</option>
             </select>
             @if(getError('questionsType')) {
-              <p class="text-red-500 text-sm mt-1">{{ (getError('questionsType') || '') | sentencecase }}</p>
+            <p class="text-red-500 text-sm mt-1">
+              {{ getError("questionsType") || "" | sentencecase }}
+            </p>
+            } @if(newBlockForm.get('questionsType')?.disabled) {
+            <p class="text-gray-500 text-xs mt-1">
+              Question type cannot be changed after weights are defined
+            </p>
             }
           </div>
 
           <!-- Кол-во ответов -->
           <div>
-            <label for="block-answers" class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1">
+            <label
+              for="block-answers"
+              class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1"
+            >
               Number of answers <span class="text-red-500">*</span>
             </label>
-            <input type="number" formControlName="numberOfAnswers" id="block-answers"
-              class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500" />
+            <input
+              type="number"
+              formControlName="numberOfAnswers"
+              id="block-answers"
+              class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            />
             @if(getError('numberOfAnswers')) {
-              <p class="text-red-500 text-sm mt-1">{{ (getError('numberOfAnswers') || '') | sentencecase }}</p>
+            <p class="text-red-500 text-sm mt-1">
+              {{ getError("numberOfAnswers") || "" | sentencecase }}
+            </p>
+            } @if(newBlockForm.get('numberOfAnswers')?.disabled) {
+            <p class="text-gray-500 text-xs mt-1">
+              Number of answers cannot be changed after questions are defined
+            </p>
             }
           </div>
 
           <!-- Чекбоксы -->
           <div class="flex flex-col sm:flex-row sm:items-center gap-3">
             <label class="flex items-center text-slate-700">
-              <input type="checkbox" formControlName="randomizeQuestions" class="mr-2 w-5 h-5 accent-sky-600" />
+              <input
+                type="checkbox"
+                formControlName="randomizeQuestions"
+                class="mr-2 w-5 h-5 accent-sky-600"
+              />
               Randomize questions
             </label>
             <label class="flex items-center text-slate-700">
-              <input type="checkbox" formControlName="randomizeAnswers" class="mr-2 w-5 h-5 accent-sky-600" />
+              <input
+                type="checkbox"
+                formControlName="randomizeAnswers"
+                class="mr-2 w-5 h-5 accent-sky-600"
+              />
               Randomize answers
             </label>
             <label class="flex items-center text-slate-700">
-              <input type="checkbox" formControlName="hasTimeLimit" class="mr-2 w-5 h-5 accent-sky-600" />
+              <input
+                type="checkbox"
+                formControlName="hasTimeLimit"
+                class="mr-2 w-5 h-5 accent-sky-600"
+              />
               Has time limit
             </label>
           </div>
 
           <!-- Временной лимит -->
           @if(newBlockForm.get('hasTimeLimit')?.value) {
-            <div>
-              <label for="block-timelimit"
-                class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1">
-                Time limit (in minutes) <span class="text-red-500">*</span>
-              </label>
-              <input type="number" formControlName="timeLimit" id="block-timelimit"
-                class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                placeholder="Enter time limit" />
-              @if(getError('timeLimit')) {
-                <p class="text-red-500 text-sm mt-1">{{ (getError('timeLimit') || '') | sentencecase }}</p>
-              }
-            </div>
+          <div>
+            <label
+              for="block-timelimit"
+              class="block text-base sm:text-lg md:text-xl font-medium text-slate-700 mb-1"
+            >
+              Time limit (in minutes) <span class="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              formControlName="timeLimit"
+              id="block-timelimit"
+              class="w-full px-4 py-2 border border-gray-300 rounded shadow-sm text-gray-800 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+              placeholder="Enter time limit"
+            />
+            @if(getError('timeLimit')) {
+            <p class="text-red-500 text-sm mt-1">
+              {{ getError("timeLimit") || "" | sentencecase }}
+            </p>
+            }
+          </div>
           }
 
           <!-- Кнопки -->
           @if(isEditing) {
-            <div class="flex gap-4 justify-end">
-              <button class="bg-sky-700 hover:bg-sky-800 text-white font-medium px-6 py-2 rounded"
-                (click)="updateBlock()">Save changes</button>
-              <button class="bg-gray-400 hover:bg-gray-500 text-white font-medium px-6 py-2 rounded"
-                (click)="cancelEdit()">Cancel</button>
-            </div>
+          <div class="flex gap-4 justify-end">
+            <button
+              class="bg-sky-700 hover:bg-sky-800 text-white font-medium px-6 py-2 rounded"
+              (click)="updateBlock()"
+            >
+              Save changes
+            </button>
+            <button
+              class="bg-gray-400 hover:bg-gray-500 text-white font-medium px-6 py-2 rounded"
+              (click)="cancelEdit()"
+            >
+              Cancel
+            </button>
+          </div>
           } @else {
-            <div class="flex flex-col sm:flex-row sm:justify-between gap-4">
+          <div class="flex flex-col sm:flex-row sm:justify-between gap-4">
+            <button
+              class="bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-2 rounded disabled:bg-gray-400 disabled:cursor-not-allowed"
+              (click)="addNewBlock()"
+            >
+              + Add block
+            </button>
+            <div class="flex flex-col sm:flex-row gap-4">
               <button
-                class="bg-green-600  hover:bg-green-700 text-white font-medium px-6 py-2 rounded disabled:bg-gray-400 disabled:cursor-not-allowed"
-                (click)="addNewBlock()">+ Add block</button>
-              <div class="flex flex-col sm:flex-row gap-4">
-
-                <button
-                  class="bg-sky-700 hover:bg-sky-800 text-white font-medium px-6 py-2 rounded disabled:bg-sky-400"
-                  (click)="saveTest()">Save test</button>
-                <button
-                  class="bg-sky-700 hover:bg-sky-800 text-white font-medium px-6 py-2 rounded disabled:bg-sky-400"
-                  (click)="navigate()">Next →</button>
-              </div>
+                class="bg-sky-700 hover:bg-sky-800 text-white font-medium px-6 py-2 rounded disabled:bg-sky-400"
+                (click)="saveTest()"
+              >
+                Save test
+              </button>
+              <button
+                class="bg-sky-700 hover:bg-sky-800 text-white font-medium px-6 py-2 rounded disabled:bg-sky-400"
+                (click)="navigate()"
+              >
+                Next →
+              </button>
             </div>
+          </div>
           }
-
         </form>
       </div>
 
       <!-- Правая колонка: список блоков -->
       <div class="w-full lg:w-1/2 border-l border-gray-200 pl-4">
-        <h1 class="text-xl sm:text-2xl font-semibold text-gray-800 mb-6">Blocks list</h1>
+        <h1 class="text-xl sm:text-2xl font-semibold text-gray-800 mb-6">
+          Blocks list
+        </h1>
         @if(allBlocks.length === 0) {
-          <p class="text-gray-500 sm:text-lg md:text-xl font-medium">
-            No blocks defined yet, please add blocks to the list and save the test to proceed
-          </p>
+        <p class="text-gray-500 sm:text-lg md:text-xl font-medium">
+          No blocks defined yet, please add blocks to the list and save the test
+          to proceed
+        </p>
         } @else {
         <div class="flex flex-col gap-4">
-          @for(block of allBlocks; track block.id ?? block.name; let i = $index) {
+          @for(block of allBlocks; track block.id ?? block.name; let i = $index)
+          { @if(!block.id && (i === 0 || allBlocks[i - 1]?.id)) {
+          <hr class="my-2 border-t border-gray-300" />
+          <h2
+            class="text-gray-600 text-base font-semibold uppercase tracking-wide"
+          >
+            Unsaved blocks
+          </h2>
+          <p class="text-red-500">
+            Note, that if you don't save the test, these blocks won't be saved
+          </p>
+          }
 
+          <app-list-item
+            [item]="block"
+            type="block"
+            (edit)="onEditBlock(block)"
+            (delete)="confirmDelete(block)"
+            [isEditing]="isEditing"
+          ></app-list-item>
 
-            @if(!block.id && (i === 0 || allBlocks[i - 1]?.id)) {
-              <hr class="my-2 border-t border-gray-300" />
-              <h2 class="text-gray-600 text-base font-semibold uppercase tracking-wide">Unsaved blocks</h2>
-              <p class="text-red-500">Note, that if you don't save the test, these blocks won't be saved</p>
-            }
-
-            <app-list-item
-              [item]="block"
-              type="block"
-              (edit)="onEditBlock(block)"
-              (delete)="confirmDelete(block)"
-              [isEditing]="isEditing"
-            ></app-list-item>
-
-            <app-confirm-dialog
-              [visible]="showDeleteDialog"
-              [message]="'Are you sure you want to delete this block?'"
-              (confirm)="handleDeleteConfirmed()"
-              (cancel)="handleDeleteCancelled()">
-            </app-confirm-dialog>
+          <app-confirm-dialog
+            [visible]="showDeleteDialog"
+            [message]="'Are you sure you want to delete this block?'"
+            (confirm)="handleDeleteConfirmed()"
+            (cancel)="handleDeleteCancelled()"
+          >
+          </app-confirm-dialog>
           }
         </div>
 
         }
-
-
       </div>
-
     </div>
   </div>
 </div>
-  <app-confirm-dialog
-    [visible]="confirmDialogVisible"
-    [message]="confirmDialogMessage"
-    (confirm)="onConfirmNavigation()"
-    (cancel)="onCancelNavigation()"
-    ></app-confirm-dialog>
+<app-confirm-dialog
+  [visible]="confirmDialogVisible"
+  [message]="confirmDialogMessage"
+  (confirm)="onConfirmNavigation()"
+  (cancel)="onCancelNavigation()"
+></app-confirm-dialog>

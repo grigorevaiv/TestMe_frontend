@@ -25,7 +25,7 @@ import { SentencecasePipe } from '../../pipes/sentencecase.pipe';
 import { ToastService } from '../../services/toast.service';
 import { SessionStorageService } from '../../services/session-storage.service';
 import { ProgressBarComponent } from '../../components/progress-bar/progress-bar.component';
-import { stepRoutes } from '../../constants/step-routes';
+import { stepRoutes, stepRoutesNew } from '../../constants/step-routes';
 import { TestContextService } from '../../services/test-context.service';
 import { NgIf } from '@angular/common';
 import { ConfirmDialogComponent } from '../../components/confirm-dialog/confirm-dialog.component';
@@ -92,6 +92,7 @@ export class TestAnswersComponent {
     this.testId = id;
     this.mode = mode;
     this.sessionStorage.setTestId(id);
+    window.addEventListener('beforeunload', this.beforeUnloadHandler);
 
     await firstValueFrom(
       this.testContextService.ensureContext(this.testId, this.mode, 5)
@@ -114,8 +115,6 @@ export class TestAnswersComponent {
       this.answers = answers || [];
       this.patchAnswersToForm(this.answers);
     });
-
-    window.addEventListener('beforeunload', this.beforeUnloadHandler);
   }
 
   initializeAnswersForms() {
@@ -346,7 +345,12 @@ export class TestAnswersComponent {
       );
       this.testState = updatedState;
       await firstValueFrom(
-        this.testContextService.loadContextIfNeeded(this.testId!, 'edit', 5, true)
+        this.testContextService.loadContextIfNeeded(
+          this.testId!,
+          'edit',
+          5,
+          true
+        )
       );
       this.router.navigate(['/test-answers/edit', this.testId]);
     }
@@ -363,7 +367,7 @@ export class TestAnswersComponent {
 
     if (unsaved) {
       this.toast.show({
-        message: 'Please save your changes before proceeding.',
+        message: 'Please save changes before proceeding',
         type: 'warning',
       });
       return;
@@ -399,10 +403,15 @@ export class TestAnswersComponent {
 
   navigateToStep(step: number): void {
     const id = this.testId || this.sessionStorage.getTestId();
-    if (!id || !stepRoutes[step]) return;
-    this.router.navigate(stepRoutes[step](id));
-  }
+    const currentStep = this.testState?.currentStep ?? 1;
 
+    if (!id || !stepRoutes[step]) return;
+
+    const isForward = step > currentStep;
+    const route = isForward ? stepRoutesNew[step]() : stepRoutes[step](id);
+
+    this.router.navigate(route);
+  }
   resetNavigationState(): void {
     this.confirmNavigationVisible = false;
     this.pendingStep = null;
@@ -430,7 +439,7 @@ export class TestAnswersComponent {
     for (const blockAnswers of Object.values(this.answersPerQuestion)) {
       for (const formArray of Object.values(blockAnswers)) {
         for (const form of formArray.controls) {
-          if (form.dirty) {
+          if (form.dirty || form.invalid) {
             return true;
           }
         }

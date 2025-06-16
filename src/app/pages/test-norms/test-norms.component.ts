@@ -22,7 +22,7 @@ import { ResourceService } from '../../services/resource.service';
 import { ToastService } from '../../services/toast.service';
 import { NgClass, NgIf } from '@angular/common';
 import { ProgressBarComponent } from '../../components/progress-bar/progress-bar.component';
-import { stepRoutes } from '../../constants/step-routes';
+import { stepRoutes, stepRoutesNew } from '../../constants/step-routes';
 import { SessionStorageService } from '../../services/session-storage.service';
 import { TestContextService } from '../../services/test-context.service';
 import { ConfirmDialogComponent } from '../../components/confirm-dialog/confirm-dialog.component';
@@ -71,7 +71,7 @@ export class TestNormsComponent {
         await this.stepRedirectService.redirectIfStepAlreadyCompleted(
           mode,
           id,
-          6,
+          7,
           (id) => ['/test-norms/edit', id]
         );
       if (redirected) return;
@@ -85,6 +85,7 @@ export class TestNormsComponent {
     this.testId = id;
     this.mode = mode;
     this.sessionStorage.setTestId(id);
+    window.addEventListener('beforeunload', this.beforeUnloadHandler);
 
     await firstValueFrom(
       this.testContextService.ensureContext(this.testId, this.mode, 7)
@@ -119,8 +120,6 @@ export class TestNormsComponent {
         this.weights = weights;
       }
     });
-
-    window.addEventListener('beforeunload', this.beforeUnloadHandler);
   }
 
   normsForScale: { [scaleId: number]: FormGroup } = {};
@@ -344,7 +343,12 @@ export class TestNormsComponent {
       }
 
       await firstValueFrom(
-        this.testContextService.loadContextIfNeeded(this.testId!, 'edit', 7, true)
+        this.testContextService.loadContextIfNeeded(
+          this.testId!,
+          'edit',
+          7,
+          true
+        )
       );
       return savedNorms;
     } catch (error) {
@@ -409,8 +413,14 @@ export class TestNormsComponent {
 
   navigateToStep(step: number): void {
     const id = this.testId || this.sessionStorage.getTestId();
+    const currentStep = this.testState?.currentStep ?? 1;
+
     if (!id || !stepRoutes[step]) return;
-    this.router.navigate(stepRoutes[step](id));
+
+    const isForward = step > currentStep;
+    const route = isForward ? stepRoutesNew[step]() : stepRoutes[step](id);
+
+    this.router.navigate(route);
   }
 
   onConfirmNavigation(): void {

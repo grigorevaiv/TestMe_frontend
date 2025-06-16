@@ -13,6 +13,7 @@ export class ListItemComponent {
   @Input() item!: Test | Block | Scale | User;
   @Input() type!: 'test' | 'block' | 'scale' | 'patient';
   @Input() isEditing = false;
+  @Input() blockName!: string;
 
   get test(): Test | null {
     return this.type === 'test' ? this.item as Test : null;

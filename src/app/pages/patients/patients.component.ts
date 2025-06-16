@@ -10,16 +10,17 @@ import { SearchFilterComponent } from '../../components/search-filter/search-fil
 import { ConfirmDialogComponent } from '../../components/confirm-dialog/confirm-dialog.component';
 import { PatientService } from '../../services/patient.service';
 import { firstValueFrom } from 'rxjs';
+import { ToastService } from '../../services/toast.service';
 
 @Component({
   selector: 'app-patients',
   imports: [ListItemComponent, SearchFilterComponent, ConfirmDialogComponent],
   templateUrl: './patients.component.html',
-  styleUrl: './patients.component.css'
+  styleUrl: './patients.component.css',
 })
 export class PatientsComponent {
   route = inject(Router);
-  router = inject (ActivatedRoute);
+  router = inject(ActivatedRoute);
   sessionStorage = inject(SessionStorageService);
   resouceService = inject(PatientResourceService);
   patientService = inject(PatientService);
@@ -29,13 +30,15 @@ export class PatientsComponent {
   confirmVisible = false;
   confirmMessage = '';
   private pendingAction: (() => void) | null = null;
+  toast = inject(ToastService);
 
   constructor() {
     effect(() => {
       const data = this.resouceService.patientsResource.value();
+      if (!data) return;
       if (data) {
-      this.patients = data;
-      this.filteredPatients = data;
+        this.patients = data;
+        this.filteredPatients = data;
       }
       console.log('Patients data:', this.patients);
     });
@@ -45,7 +48,7 @@ export class PatientsComponent {
     this.resouceService.triggerRefresh();
   }
 
-  onCreatePatient(){
+  onCreatePatient() {
     this.route.navigate(['/patient/new']);
   }
 
@@ -58,6 +61,13 @@ export class PatientsComponent {
   }
 
   onDeletePatient(patient: User) {
+    if (!patient.isActive) {
+      this.toast.show({
+        message: 'This patient is already inactive',
+        type: 'warning',
+      });
+      return;
+    }
     this.confirmMessage = 'Are you sure you want to deactivate this patient?';
     this.confirmVisible = true;
     this.pendingAction = async () => {
@@ -67,6 +77,13 @@ export class PatientsComponent {
   }
 
   onReactivatePatient(patient: User) {
+    if (patient.isActive) {
+      this.toast.show({
+        message: 'This patient is already active',
+        type: 'warning',
+      });
+      return;
+    }
     this.confirmMessage = 'Do you want to reactivate this patient?';
     this.confirmVisible = true;
     this.pendingAction = async () => {
@@ -74,7 +91,6 @@ export class PatientsComponent {
       this.resouceService.triggerRefresh();
     };
   }
-
 
   onConfirmDialog() {
     this.confirmVisible = false;

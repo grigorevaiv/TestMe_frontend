@@ -10,6 +10,7 @@ import { filter, firstValueFrom, tap } from 'rxjs';
 import { SearchFilterComponent } from '../../components/search-filter/search-filter.component';
 import { TestService } from '../../services/test.service';
 import { ConfirmDialogComponent } from '../../components/confirm-dialog/confirm-dialog.component';
+import { ToastService } from '../../services/toast.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -23,6 +24,7 @@ export class DashboardComponent {
   testService = inject(TestService);
   sessionStorage = inject(SessionStorageService);
   testContextService = inject(TestContextService);
+  toast = inject(ToastService);
   tests: Test[] = [];
   filteredTests: Test[] = [];
   placeholder = 'Search tests...';
@@ -37,7 +39,8 @@ export class DashboardComponent {
     effect(() => {
       this.resourceService.refreshOnNavigationTo('/');
       const data = this.resourceService.testsResource.value();
-      console.log('🔄 effect triggered, got data:', data);
+      if (!data) return;
+      console.log('effect triggered, got data:', data);
       if (data) {
         this.tests = data;
         this.filteredTests = data;
@@ -62,7 +65,11 @@ export class DashboardComponent {
   }
 
   onDeleteTest(test: Test) {
-    this.confirmMessage = 'Are you sure you want to deativate this test?';
+    if(test.state?.state === 'inactive') {
+      this.toast.show({message: 'This test is already inactive', type: 'warning'});
+      return;
+    }
+    this.confirmMessage = 'Are you sure you want to deactivate this test?';
     this.confirmVisible = true;
     this.pendingAction = async () => {
       await firstValueFrom(this.testService.deactivateTest(test.id!));
@@ -71,6 +78,10 @@ export class DashboardComponent {
   }
 
   onReactivateTest(test: Test) {
+    if(test.state?.state === 'active') {
+      this.toast.show({message: 'This test is already active', type: 'warning'});
+      return;
+    }
     this.confirmMessage = 'Do you want to reactivate this test?';
     this.confirmVisible = true;
     this.pendingAction = async () => {
@@ -97,7 +108,6 @@ export class DashboardComponent {
   onTagSelected(tag: string) {
     this.selectedTag = tag;
   }
-
 
 
 }

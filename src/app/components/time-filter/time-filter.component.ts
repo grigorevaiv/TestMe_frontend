@@ -19,4 +19,11 @@ export class TimeFilterComponent {
       toDate: this.toDate.value ?? undefined
     });
   }
+
+  clearFilter() {
+  this.fromDate.setValue(null);
+  this.toDate.setValue(null);
+  this.emitFilter();
+}
+
 }

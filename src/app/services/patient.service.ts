@@ -50,4 +50,14 @@ export class PatientService {
     return this.http.patch<void>(`${this.baseUrl}/${patientId}/reactivate`, {});
   }
 
+  getInvitationInfo(token: string) {
+  return this.http.get<{
+    userFullName: string;
+    testTitle: string;
+    invitedBy: string;
+
+  }>(`${this.baseUrl}/invitations/${token}`);
+}
+
+
 }

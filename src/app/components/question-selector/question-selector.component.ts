@@ -21,6 +21,7 @@ export class QuestionSelectorComponent {
 
   @Output() selectQuestion = new EventEmitter<Question>();
   constructor() {
+    this.resourceService.triggerRefresh();
     effect(() => {
       this.questions = this.resourceService.allQuestionsResource.value() ?? [];
       this.tags = this.resourceService.allTagsResource.value() ?? [];
