@@ -228,4 +228,6 @@ export class PlayTestComponent {
   get isLongQuestion(): boolean {
     return this.question()?.text.length > 70;
   }
+
+
 }

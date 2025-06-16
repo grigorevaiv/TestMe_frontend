@@ -8,13 +8,24 @@
     @if (testStarted() && blockIds.length && !testCompleted()) {
     <div class="flex gap-4 w-full justify-around">
       @for (blockId of blockIds; track blockId) {
-      <div class="flex flex-col items-center w-full">
-        <p class="text-sm text-gray-600 mb-1">Block {{ block().order }}: {{block().name}}</p>
-        <div class="w-full h-3 bg-gray-200 rounded">
+      <div class="flex flex-col items-center w-full relative">
+        <div class="w-full h-5 bg-gray-200 rounded relative">
           <div
             class="h-full bg-green-500 rounded"
             [style.width.%]="getBlockProgress(blockId) * 100"
           ></div>
+          @if (blockId === block()?.id) {
+          <p class="text-sm text-gray-600 mb-1">
+            Block {{ block()?.order }}: {{ block()?.name }}
+          </p>
+          } @if (blockId === block()?.id && block()?.hasTimeLimit && timeLeft()
+          !== null) {
+          <div
+            class="absolute right-2 top-1/2 -translate-y-1/2 text-black font-semibold text-base z-10 pointer-events-none"
+          >
+            Time left {{ timeLeft() }} sec
+          </div>
+          }
         </div>
       </div>
       }
